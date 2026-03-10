@@ -1,0 +1,74 @@
+# ===============================
+# General
+# ===============================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+
+# ===============================
+# Environment files
+# ===============================
+.env
+.env.*
+!.env.example
+
+# ===============================
+# Node / Frontend
+# ===============================
+node_modules/
+dist/
+build/
+coverage/
+*.local
+
+# ===============================
+# Python / Backend
+# ===============================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+datasets/
+
+venv/
+.env/
+.envrc
+.venv/
+
+# ===============================
+# Jupyter / Experiments
+# ===============================
+.ipynb_checkpoints/
+
+# ===============================
+# Vector DB / Generated indexes
+# ===============================
+chroma/
+faiss_index/
+*.faiss
+*.index
+
+# ===============================
+# Model caches
+# ===============================
+.cache/
+.huggingface/
+models/
+
+# ===============================
+# IDE
+# ===============================
+.vscode/
+.idea/
+
+# ===============================
+# OS
+# ===============================
+.DS_Store
+Thumbs.db
+
+build/
