@@ -1,6 +1,7 @@
 # Capstone - RAG System
-CLaRa — using a shared backend interface, a React + TypeScript
-frontend, and a Python backend for retrieval, orchestration, 
+Retrieval-Augmented Generation system for intelligent document Q & A. 
+We're implementing 3 different approaches using a shared backend interface. 
+React + TypeScript for frontend, Python at the backend for retrieval, orchestration, 
 and LLM-based answer generation.
 
 
@@ -18,10 +19,10 @@ Build a document Q&A system that:
 
 - `frontend/` — React + TypeScript user interface
 - `backend/` — Python backend and integrated RAG pipeline
-- `vector/` — vector retrieval research and implementation
-- `keyword/` — keyword/BM25 retrieval research & implementation
-- `clara/` — CLaRa retrieval research and implementation
-- `shared/` — shared schemas, prompts, evaluation assets, 
+- `vector_retrieval/` — vector retrieval research and implementation
+- `keyword_retrieval/` — keyword/BM25 retrieval research & implementation
+- `clara_retrieval/` — CLaRa retrieval research and implementation
+- `shared_data/` — shared schemas, prompts, evaluation assets, 
    API contracts, and docs
 
 
