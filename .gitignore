@@ -32,7 +32,7 @@ __pycache__/
 *.pyd
 *.egg-info/
 *.egg
-datasets/
+
 
 venv/
 .env/
