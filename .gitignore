@@ -26,6 +26,7 @@ coverage/
 # ===============================
 # Python / Backend
 # ===============================
+datasets/
 __pycache__/
 *.pyc
 *.pyo
@@ -40,7 +41,7 @@ venv/
 .venv/
 
 # ===============================
-# Jupyter / Experiments
+# Jupyter / Collab / Experiments
 # ===============================
 .ipynb_checkpoints/
 
