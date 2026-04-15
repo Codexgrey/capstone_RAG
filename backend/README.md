@@ -18,6 +18,14 @@ pip install -r requirements.txt
 Create a .env file in backend/:
 
 DATABASE_URL=postgresql://postgres:<password>@localhost:5432/ragdb
+# JWT secret key (must NOT be left as default)
+# Generate a secure random key:
+# In Ubuntu terminal (prefered) type:  openssl rand -hex 32
+JWT_SECRET=<paste-generated-key>
+
+# Token settings
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 ## Database
 

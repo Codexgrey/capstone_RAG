@@ -2,3 +2,7 @@ uvicorn
 fastapi
 postgresql
 postgresql-contrib #extra utilities
+# for Auth
+python-jose
+passlib
+pydantic[email] # email validator
