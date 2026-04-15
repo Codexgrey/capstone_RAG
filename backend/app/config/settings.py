@@ -18,6 +18,8 @@ class Settings:
     JWT_SECRET: str = os.getenv("JWT_SECRET", "changethis")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+    STORAGE_PATH: str = os.getenv("STORAGE_PATH", "./storage/documents")
+    CHROMA_PERSIST_DIR: str = os.getenv("CHROMA_PERSIST_DIR", "./chroma_storage")
 
     # Validation on startup
     def validate(self):
@@ -45,9 +47,11 @@ class Settings:
         print("✅ Settings loaded successfully")
         print(f"DATABASE_URL : {self.DATABASE_URL[:40]}...")
         print(f"JWT_ALGORITHM : {self.JWT_ALGORITHM}")
-        print(f"JWT_EXPIRE_MINUTES: {self.JWT_EXPIRE_MINUTES}")
+        print(f"JWT_EXPIRE_MINUTES: {self.JWT_EXPIRE_MINUTES}") 
+        print(f"STORAGE_PATH : {self.STORAGE_PATH}")
+        print(f"CHROMA_PERSIST_DIR: {self.CHROMA_PERSIST_DIR}")
 
 
 
-# Single instance imported everywhere ───────────────────────────────────────
+# Single instance imported everywhere 
 settings = Settings()
