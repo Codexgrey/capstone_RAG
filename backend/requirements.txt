@@ -6,5 +6,6 @@ postgresql-contrib #extra utilities
 python-jose
 passlib
 pydantic[email] # email validator
+bcrypt==4.0.1 # had some errors version mismatch between passlib and bcrypt
 # to parse multipart/form-data
 python-multipart

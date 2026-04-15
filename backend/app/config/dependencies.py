@@ -1,21 +1,12 @@
 """
 config/dependencies.py — Shared Auth Utilities
-================================================
 Contains:
-  - Password hashing / verification  (bcrypt via passlib)
-  - JWT token creation / decoding    (reads from settings.py)
-  - get_current_user()               (FastAPI dependency — protects any route)
+  - Password hashing / verification (bcrypt via passlib)
+  - JWT token creation / decoding (reads from settings.py)
+  - get_current_user() (FastAPI dependency — protects any route)
 
 Reads JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES from settings.py.
 Never calls os.getenv() directly.
-
-Usage in any router:
-    from app.config.dependencies import get_current_user
-    from app.models.db_models import User
-
-    @router.get("/protected")
-    def protected_route(current_user: User = Depends(get_current_user)):
-        return {"user": current_user.username}
 """
 
 from datetime import datetime, timedelta
