@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.config.database import get_db, init_db
 from app.config.settings import settings
 from app.api import auth
+from app.api import upload
 
 app = FastAPI()
 
@@ -14,7 +15,9 @@ def startup():
     print("RAG Backend running")
 
 # endpoints for register and login
-app.include_router(auth.router, prefix="/api") 
+app.include_router(auth.router, prefix="/api")
+# endpoint for document upload and status 
+app.include_router(upload.router, prefix="/api") 
 
 @app.get("/")
 def root():

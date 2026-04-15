@@ -1,33 +1,8 @@
 """
-routers/auth.py — Authentication Routes
-=========================================
+routers/auth.py: Authentication Routes
 Endpoints:
-    POST /auth/register   → create a new user account
-    POST /auth/login      → verify credentials, return JWT token
-
-These are the only two routes that do NOT require a token.
-Every other route in the system uses Depends(get_current_user).
-
-What the frontend (Patricia / TypeScript) receives:
-
-  Register response:
-  {
-    "id":         "uuid...",
-    "username":   "khalid",
-    "email":      "khalid@example.com",
-    "created_at": "2026-03-10T09:00:00Z"
-  }
-
-  Login response:
-  {
-    "access_token": "eyJhbGci...",
-    "token_type":   "bearer",
-    "user": {
-      "id":       "uuid...",
-      "username": "khalid"
-    }
-  }
-
+    POST /auth/register: create a new user account
+    POST /auth/login: verify credentials, return JWT token
   The frontend stores access_token and sends it in every request header:
     Authorization: Bearer eyJhbGci...
 """
@@ -46,7 +21,7 @@ from datetime import datetime
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-# ── POST /auth/register ────────────────────────────────────────────────────────
+# POST /auth/register
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -101,7 +76,7 @@ def register(payload: UserRegisterRequest, db: Session = Depends(get_db)):
     return new_user
 
 
-# ── POST /auth/login ───────────────────────────────────────────────────────────
+# POST /auth/login
 @router.post(
     "/login",
     response_model=TokenResponse,
@@ -130,7 +105,7 @@ def login(payload: UserLoginRequest, db: Session = Depends(get_db)):
             detail="Incorrect email or password."
         )
 
-    # Generate JWT — sub = user's UUID (this is how every request is tied to a user)
+    # Generate JWT: sub = user's UUID (this is how every request is tied to a user)
     token = create_access_token(data={"sub": str(user.id)})
 
     # Log the action

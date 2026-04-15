@@ -6,3 +6,5 @@ postgresql-contrib #extra utilities
 python-jose
 passlib
 pydantic[email] # email validator
+# to parse multipart/form-data
+python-multipart
