@@ -46,3 +46,19 @@ uvicorn app.main:app --reload
 ## Test
 http://localhost:8000/ -> {"message":"Backend Running"}
 http://localhost:8000/db_test -> shows PostgreSQL version
+
+## LLM Backends
+
+Right now we’re sticking with **Groq** (fast + free).  
+OpenAI and Anthropic are supported too, but they need API keys — we’ll add those later if needed.
+
+### Groq Setup
+1. Grab a free API key here → https://console.groq.com  
+2. Add this to your `.env`:
+GROQ_API_KEY=your_key_here LLM_BACKEND=groq
+3. Install the package:
+```bash
+pip install groq
+```
+That’s it Groq should run right away.
+If you don’t set up any backend, the system just stays in placeholder mode (hardcoded replies).
