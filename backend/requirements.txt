@@ -9,3 +9,9 @@ pydantic[email] # email validator
 bcrypt==4.0.1 # had some errors version mismatch between passlib and bcrypt
 # to parse multipart/form-data
 python-multipart
+# lightweight version
+chromadb
+sentence-transformers --no-deps
+transformers huggingface-hub tqdm numpy scikit-learn
+# for now testing with groq
+groq
