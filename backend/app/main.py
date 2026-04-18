@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.config.database import get_db, init_db
@@ -7,7 +8,24 @@ from app.api import auth
 from app.api import upload
 from app.api import query
 
-app = FastAPI()
+app = FastAPI(
+    title = "Capstone RAG APO",
+    description = "Backend for the Rag system",
+    version = "1.0.0"
+)
+
+# Add the CORS 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials = True,
+    allow_method = ["*"],
+    allow_headers = ["*"],
+)
 
 @app.on_event("startup")
 def startup():

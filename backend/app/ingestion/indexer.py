@@ -47,7 +47,7 @@ def get_chroma_client():
         _chroma_client = chromadb.PersistentClient(
             path = settings.CHROMA_PERSIST_DIR
         )
-        print(f"  ✅ ChromaDB client initialized → {settings.CHROMA_PERSIST_DIR}")
+        print(f"✅ ChromaDB client initialized → {settings.CHROMA_PERSIST_DIR}")
     return _chroma_client
 
 # enusres i have a collection named documents
@@ -61,7 +61,7 @@ def get_collection():
             # use cosine similarity
             metadata = {"hnsw:space": "cosine"}
         )
-        print(f"  ✅ ChromaDB collection ready → '{COLLECTION_NAME}'")
+        print(f"✅ ChromaDB collection ready → '{COLLECTION_NAME}'")
     return _collection
 
 def get_embedding_model():
@@ -69,9 +69,9 @@ def get_embedding_model():
     # Downloads on first use, cached locally after that.
     global _embedding_model
     if _embedding_model is None:
-        print(f"  ⏳ Loading embedding model '{EMBEDDING_MODEL}'...")
+        print(f"⏳ Loading embedding model '{EMBEDDING_MODEL}'...")
         _embedding_model = SentenceTransformer(EMBEDDING_MODEL)
-        print(f"  ✅ Embedding model loaded")
+        print(f"✅ Embedding model loaded")
     return _embedding_model
 
 def index_chunks(
@@ -152,7 +152,7 @@ def delete_document_chunks(document_id: str) -> int:
         return 0
  
     collection.delete(ids=results["ids"])
-    print(f"🗑️  Deleted {len(results['ids'])} chunks for document {document_id}")
+    print(f"🗑️ Deleted {len(results['ids'])} chunks for document {document_id}")
     return len(results["ids"])
  
 # Added the search chunk function
