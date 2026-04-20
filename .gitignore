@@ -52,6 +52,8 @@ chroma/
 faiss_index/
 *.faiss
 *.index
+faiss_index.bin
+chunk_records.npy
 
 # ===============================
 # Model caches
