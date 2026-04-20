@@ -76,6 +76,7 @@ def retrieve(
             'word_count':     chunk['word_count'],
             'distance':       distance_value,
             'similarity':     similarity_value,
+            'score':          similarity_value,   # contract field — shared_data/schemas/retrieval_response.schema.json
             'citation':       f"[{chunk['document_title']} | {chunk['chunk_id']}]",
             'text':           chunk['text'],
             'metadata':       chunk.get('metadata', {}),
