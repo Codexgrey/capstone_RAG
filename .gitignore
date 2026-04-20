@@ -60,7 +60,7 @@ chunk_records.npy
 # ===============================
 .cache/
 .huggingface/
-models/
+
 
 # ===============================
 # IDE
