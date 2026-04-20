@@ -46,7 +46,7 @@ def retrieve(
     Returns:
         List of result dicts ordered by similarity (highest first), each containing:
             rank, document_id, document_title, source, chunk_id, chunk_index,
-            word_count, distance, similarity, citation, text.
+            word_count, distance, similarity, citation, text, metadata.
 
     Raises:
         ValueError: If the query is empty or whitespace.
@@ -57,27 +57,28 @@ def retrieve(
     query_vector = model.encode([query], convert_to_numpy=True)
     query_vector = np.array(query_vector, dtype='float32')
 
-    safe_top_k = min(top_k, len(chunk_records))
-    distances, indices = index.search(query_vector, safe_top_k)
+    safe_top_k          = min(top_k, len(chunk_records))
+    distances, indices  = index.search(query_vector, safe_top_k)
 
     results = []
     for rank, chunk_idx in enumerate(indices[0]):
-        chunk = chunk_records[int(chunk_idx)]
-        distance_value = float(distances[0][rank])
+        chunk           = chunk_records[int(chunk_idx)]
+        distance_value  = float(distances[0][rank])
         similarity_value = float(l2_to_similarity(distance_value))
 
         results.append({
-            'rank': rank + 1,
-            'document_id': chunk['document_id'],
+            'rank':           rank + 1,
+            'document_id':    chunk['document_id'],
             'document_title': chunk['document_title'],
-            'source': chunk['source'],
-            'chunk_id': chunk['chunk_id'],
-            'chunk_index': chunk['chunk_index'],
-            'word_count': chunk['word_count'],
-            'distance': distance_value,
-            'similarity': similarity_value,
-            'citation': f"[{chunk['document_title']} | {chunk['chunk_id']}]",
-            'text': chunk['text']
+            'source':         chunk['source'],
+            'chunk_id':       chunk['chunk_id'],
+            'chunk_index':    chunk['chunk_index'],
+            'word_count':     chunk['word_count'],
+            'distance':       distance_value,
+            'similarity':     similarity_value,
+            'citation':       f"[{chunk['document_title']} | {chunk['chunk_id']}]",
+            'text':           chunk['text'],
+            'metadata':       chunk.get('metadata', {}),
         })
 
     return results

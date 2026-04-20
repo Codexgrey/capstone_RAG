@@ -46,7 +46,7 @@ def build_prompt(query: str, retrieved_results: List[Dict[str, Any]]) -> str:
 
     Return your answer in exactly this format:
     Answer:
-    <2-4 sentence answer to the question>
+    <as many sentences as needed to answer the question, but be concise and use only the retrieved context>
     <space before producing "Evidence Used" for visual hierarchy>
 
     Evidence Used:

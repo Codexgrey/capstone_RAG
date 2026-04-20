@@ -1,71 +1,98 @@
 """
 src/utils/loader.py
-Helper utility — loads a raw text document from disk.
+Helper utility — loads documents from disk.
 
-Test document setup (mirrors notebook Section 2 and Section 3):
-    document_title  = 'Vector Retrieval RAG Notes'
-    document_source = 'tests/sample.txt'
-    document_id     = 'doc-001'
-
-    The loader reads sample.txt, prints the same metadata header that
-    appears in the notebook, and returns the full text for the pipeline.
+Supports .txt, .md, .pdf, and .docx file types.
+Returns document text and file-level metadata for each loaded file.
 """
 
 import os
+import glob
+from datetime import datetime, timezone
+from pypdf import PdfReader
+from docx import Document as DocxDocument
+
 
 # ---------------------------------------------------------------------------
-# Test document constants  (Section 2 — Test Document Setup)
+# folder scanner
 # ---------------------------------------------------------------------------
-TEST_DOCUMENT_TITLE  = 'Vector Retrieval RAG Notes'
-TEST_DOCUMENT_SOURCE = os.path.join('tests', 'sample.txt')
-TEST_DOCUMENT_ID     = 'doc-001'
 
-
-def load_document(path: str) -> str:
+def get_files_from_folder(folder_path: str, extensions=('.txt', '.pdf', '.docx', '.md')) -> list:
     """
-    Read a UTF-8 text file and return its full contents as a string.
+    Scan a folder and return a sorted list of all files matching the given extensions.
+
+    Args:
+        folder_path: Path to the folder to scan.
+        extensions:  Tuple of file extensions to include.
+
+    Returns:
+        Sorted list of matching file paths.
+    """
+    files = []
+    for ext in extensions:
+        files.extend(glob.glob(os.path.join(folder_path, f'*{ext}')))
+    return sorted(files)
+
+
+# ---------------------------------------------------------------------------
+# core loader
+# ---------------------------------------------------------------------------
+
+def load_document(path: str) -> tuple:
+    """
+    Load a document from disk and return its text content plus file-level metadata.
+
+    Supports: .txt, .md, .pdf, .docx
 
     Args:
         path: File path to the document.
 
     Returns:
-        Full text content of the document.
+        Tuple of (text: str, file_metadata: dict).
+        Metadata keys: file_name, file_type, file_size_kb, uploaded_at
 
     Raises:
-        FileNotFoundError: If the file does not exist at the given path.
+        FileNotFoundError: If the file does not exist.
+        ValueError:        If the file extension is not supported.
         RuntimeError:      If the file cannot be read.
     """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f'Document not found: {path}')
+
+    ext          = os.path.splitext(path)[1].lower()
+    file_name    = os.path.basename(path)
+    file_size_kb = round(os.path.getsize(path) / 1024, 2)
+    uploaded_at  = datetime.now(timezone.utc).isoformat()
+
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError(f'Document not found at path: {path}')
+        if ext in ('.txt', '.md'):
+            with open(path, 'r', encoding='utf-8') as f:
+                text = f.read()
+
+        elif ext == '.pdf':
+            reader = PdfReader(path)
+            pages  = [page.extract_text() or '' for page in reader.pages]
+            text   = '\n'.join(pages)
+
+        elif ext == '.docx':
+            doc  = DocxDocument(path)
+            text = '\n'.join(para.text for para in doc.paragraphs if para.text.strip())
+
+        else:
+            raise ValueError(
+                f'Unsupported file type: "{ext}". Supported: .txt, .md, .pdf, .docx'
+            )
+
+    except (ValueError, FileNotFoundError):
+        raise
     except Exception as e:
         raise RuntimeError(f'Failed to read document at {path}: {e}')
 
+    file_metadata = {
+        'file_name':    file_name,
+        'file_type':    ext.lstrip('.'),
+        'file_size_kb': file_size_kb,
+        'uploaded_at':  uploaded_at,
+    }
 
-def load_test_document() -> tuple:
-    """
-    Load the standard test document used across the notebook and main pipeline.
-
-    Mirrors notebook Section 2 (test document metadata printout) and
-    Section 3 (loader call + character-count + preview printout).
-
-    Returns:
-        Tuple of (document_text, document_title, document_source, document_id).
-    """
-    # Section 2 — print document metadata (mirrors notebook cell output)
-    print('Sample document ready.')
-    print('Title    :', TEST_DOCUMENT_TITLE)
-    print('Source   :', TEST_DOCUMENT_SOURCE)
-    print('Document ID:', TEST_DOCUMENT_ID)
-    print()
-
-    # Section 3 — load and preview (mirrors notebook cell output)
-    document_text = load_document(TEST_DOCUMENT_SOURCE)
-    print('Document length (characters):', len(document_text))
-    print()
-    print(document_text[:100])
-    print()
-
-    return document_text, TEST_DOCUMENT_TITLE, TEST_DOCUMENT_SOURCE, TEST_DOCUMENT_ID
+    return text, file_metadata
