@@ -59,7 +59,8 @@ faiss_index/
 .cache/
 .huggingface/
 models/
-
+faiss_index.bin
+chunk_records.npy
 # ===============================
 # IDE
 # ===============================
