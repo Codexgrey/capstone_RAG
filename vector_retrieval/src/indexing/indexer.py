@@ -21,8 +21,8 @@ CHUNKS_SAVE_PATH = 'chunk_records.npy'
 
 def build_pipeline(
     document_paths: List[str],
-    chunk_size: int = 150,
-    chunk_overlap: int = 30,
+    chunk_size: int = 300,
+    chunk_overlap: int = 50,
     model_name: str = 'all-MiniLM-L6-v2',
     index_path: str = INDEX_SAVE_PATH,
     chunks_path: str = CHUNKS_SAVE_PATH,
@@ -108,6 +108,7 @@ def build_pipeline(
     embedding_model = load_embedding_model(model_name)
     chunk_texts     = [chunk['text'] for chunk in all_chunk_records]
     embeddings      = encode_chunks(embedding_model, chunk_texts)
+    
     print(f'Embeddings shape : {embeddings.shape}')
     print(f'Embedding dtype  : {embeddings.dtype}\n')
 

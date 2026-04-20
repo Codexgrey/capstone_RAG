@@ -1,21 +1,25 @@
 """
 src/evaluation/evaluate.py
 Retrieval evaluation scripts.
-Measures retrieval quality (Precision@K, Recall@K, MRR) and pipeline latency
-against a set of test queries with known relevant chunk IDs.
+Measures retrieval quality (Precision@K, Recall@K, MRR) and pipeline latency.
+
+Two evaluation modes
+--------------------
+1. Runtime evaluation (always runs)
+   Reports latency, similarity scores, rank distribution, and source coverage
+   for every query — no ground truth required. This is what fires after every
+   python -m src.main run.
+
+2. Ground-truth evaluation (fires when the query is in TEST_QUERIES)
+   Computes Precision@K, Recall@K, and MRR against known relevant chunk IDs.
+   Used for formal benchmarking. Add queries to TEST_QUERIES as you build
+   your test suite.
 
 Test query bank
 ---------------
-Each entry maps a natural language question to the chunk IDs from sample.txt
-that a correct retrieval should surface. Chunk IDs follow the pattern
-'doc-001-chunk-N' where N is 1-indexed (set by the chunker).
-
-    Chunk 1  — RAG overview: two-stage design, LLM constrained by retrieval
-    Chunk 2  — Retrieval stage: sentence-transformer encoding, vector space
-    Chunk 3  — FAISS index: nearest-neighbour search, top-k
-    Chunk 4  — Chunk metadata: document_id, title, source, citations
-    Chunk 5  — Similarity score: L2 distance -> similarity formula
-    Chunk 6  — Prompt builder + generator (Groq, llama-3.1-8b-instant)
+Each entry maps a natural language question to the chunk IDs that a correct
+retrieval should surface. Chunk IDs follow the pattern '<doc_id>-chunk-N'.
+Update these as your document set grows.
 
 Usage
 -----
@@ -29,6 +33,7 @@ from typing import List, Dict, Any, Optional
 
 # ---------------------------------------------------------------------------
 # Test query bank — query -> list of relevant chunk IDs
+# -These are updated to match actual documents and chunk IDs.
 # ---------------------------------------------------------------------------
 TEST_QUERIES: Dict[str, List[str]] = {
     'How does a vector retrieval RAG system answer a question?': [
@@ -56,7 +61,7 @@ TEST_QUERIES: Dict[str, List[str]] = {
 
 
 # ---------------------------------------------------------------------------
-# Core metric functions
+# core metric functions
 # ---------------------------------------------------------------------------
 
 def precision_at_k(retrieved_chunk_ids: List[str], relevant_chunk_ids: List[str], k: int) -> float:
@@ -71,9 +76,9 @@ def precision_at_k(retrieved_chunk_ids: List[str], relevant_chunk_ids: List[str]
     Returns:
         Precision@K in [0.0, 1.0].
     """
-    top_k = retrieved_chunk_ids[:k]
+    top_k        = retrieved_chunk_ids[:k]
     relevant_set = set(relevant_chunk_ids)
-    hits = sum(1 for cid in top_k if cid in relevant_set)
+    hits         = sum(1 for cid in top_k if cid in relevant_set)
     return hits / k if k > 0 else 0.0
 
 
@@ -89,9 +94,9 @@ def recall_at_k(retrieved_chunk_ids: List[str], relevant_chunk_ids: List[str], k
     Returns:
         Recall@K in [0.0, 1.0].
     """
-    top_k = retrieved_chunk_ids[:k]
+    top_k        = retrieved_chunk_ids[:k]
     relevant_set = set(relevant_chunk_ids)
-    hits = sum(1 for cid in top_k if cid in relevant_set)
+    hits         = sum(1 for cid in top_k if cid in relevant_set)
     return hits / len(relevant_set) if relevant_set else 0.0
 
 
@@ -119,7 +124,7 @@ def evaluate_retrieval(
     k: int = 3,
 ) -> Dict[str, float]:
     """
-    Compute all retrieval metrics for a single query result set.
+    Compute Precision@K, Recall@K, and MRR for a single query result set.
 
     Args:
         results:            Retriever output — list of result dicts ordered by rank.
@@ -156,36 +161,107 @@ class Timer:
 
 
 # ---------------------------------------------------------------------------
-# report printer
+# runtime evaluation — always runs, no ground truth required
 # ---------------------------------------------------------------------------
 
-def print_evaluation_report(
+def print_runtime_report(
+    query: str,
+    results: List[Dict[str, Any]],
+    latency_ms: float,
+) -> None:
+    """
+    Print a runtime evaluation report for every query run.
+
+    Reports latency, per-result similarity scores, and source document coverage.
+    This fires on every run regardless of whether the query is in TEST_QUERIES.
+
+    Args:
+        query:      The natural language query that was run.
+        results:    Retriever output list (ordered by rank).
+        latency_ms: End-to-end retrieval latency in milliseconds.
+    """
+    sep     = '-' * 110
+    top_k   = len(results)
+
+    # similarity stats
+    scores      = [r['similarity'] for r in results]
+    avg_sim     = sum(scores) / len(scores) if scores else 0.0
+    top_sim     = max(scores) if scores else 0.0
+    bottom_sim  = min(scores) if scores else 0.0
+
+    # source coverage — unique documents in results
+    sources = list(dict.fromkeys(r['document_title'] for r in results))
+
+    print(f'\nEVALUATION REPORT')
+    print('=' * 110)
+    print(
+        f'Query  : {query}'
+        f'Top-K  : {top_k}'
+    )
+    print(sep)
+
+    # per-result breakdown
+    print('Retrieved Chunks:')
+    for r in results:
+        bar = chr(9608) * int(r['similarity'] * 20)
+        print(
+            f"  Rank {r['rank']}  |  {r['chunk_id']:<30}  |  "
+            f"Similarity: {r['similarity']:.4f}  {bar}"
+        )
+    print(sep)
+
+    # similarity summary
+    print('Similarity Summary:')
+    print(
+        f'  {"Top score:" :<20} {top_sim:.4f} \n'
+        f'  {"Bottom score:" :<20} {bottom_sim:.4f} \n'
+        f'  {"Average score:" :<20} {avg_sim:.4f} \n'
+    )
+    print(sep)
+
+    # source coverage
+    print(f'Source Coverage  : {len(sources)} document(s) represented in top-{top_k}')
+    for s in sources:
+        print(f'  - {s}')
+    print(sep)
+
+    # latency
+    print(f'  {"Latency (ms)":<22} {latency_ms:.1f} ms')
+    print(sep)
+
+
+# ---------------------------------------------------------------------------
+# ground-truth evaluation — fires when query is in TEST_QUERIES
+# ---------------------------------------------------------------------------
+
+def print_ground_truth_report(
     query: str,
     metrics: Dict[str, float],
     latency_ms: float,
-    relevant_chunk_ids: Optional[List[str]] = None,
-    retrieved_ids: Optional[List[str]] = None,
+    relevant_chunk_ids: List[str],
+    retrieved_ids: List[str],
 ) -> None:
     """
-    Print a formatted evaluation report to stdout.
+    Print the formal ground-truth evaluation report (Precision, Recall, MRR).
 
     Args:
         query:              The evaluated query string.
         metrics:            Dict returned by evaluate_retrieval().
         latency_ms:         End-to-end retrieval latency in milliseconds.
-        relevant_chunk_ids: Ground-truth chunk IDs (printed for reference).
-        retrieved_ids:      Actual retrieved chunk IDs (printed for reference).
+        relevant_chunk_ids: Ground-truth chunk IDs.
+        retrieved_ids:      Actual retrieved chunk IDs.
     """
     sep = '-' * 110
-    print(f'\nEVALUATION REPORT')
+    print(f'\nGROUND-TRUTH EVALUATION')
     print('=' * 110)
+
     print(f'Query : {query}')
     print(sep)
 
-    if relevant_chunk_ids is not None:
-        print(f'Ground-truth relevant chunks : {relevant_chunk_ids}')
-    if retrieved_ids is not None:
-        print(f'Retrieved chunk IDs          : {retrieved_ids}')
+    print(
+        f'Ground-truth relevant chunks : {relevant_chunk_ids}'
+        f'Retrieved chunk IDs          : {retrieved_ids}'
+    )
     print(sep)
 
     for metric_name, score in metrics.items():
@@ -193,12 +269,12 @@ def print_evaluation_report(
         bar   = chr(9608) * int(score * 20)
         print(f'  {label:<22} {score:.4f}   {bar}')
 
-    print(f'\n  {"LATENCY (ms)":<22} {latency_ms:.1f} ms')
+    print(f'\n  {"Latency (ms)":<22} {latency_ms:.1f} ms')
     print(sep)
 
 
 # ---------------------------------------------------------------------------
-# Top-level runner — called from main.py
+# top-level runner — called from main.py
 # ---------------------------------------------------------------------------
 
 def run_evaluation(
@@ -208,11 +284,9 @@ def run_evaluation(
     k: int = 3,
 ) -> Dict[str, Any]:
     """
-    Look up ground-truth for the query, compute all metrics, and print
-    the evaluation report.
-
-    If the query is not in the TEST_QUERIES bank the function still reports
-    latency and notes that no ground-truth is available — it does not crash.
+    Run both evaluation modes for a query:
+      1. Runtime report   — always prints (latency, similarity, source coverage).
+      2. Ground-truth     — prints only if the query is in TEST_QUERIES.
 
     Args:
         retrieved_results: Retriever output list (ordered by rank).
@@ -221,25 +295,32 @@ def run_evaluation(
         k:                 Cut-off rank for precision and recall.
 
     Returns:
-        Dict containing metrics and latency_ms, suitable for logging.
+        Dict containing all computed metrics and latency_ms.
     """
+    # 1. runtime report — always fires
+    print_runtime_report(query, retrieved_results, latency_ms)
+
+    metrics = {'latency_ms': latency_ms}
+
+    # 2. ground-truth report — fires only when query is registered
     relevant_chunk_ids = TEST_QUERIES.get(query)
-    retrieved_ids = [r['chunk_id'] for r in retrieved_results]
+    if relevant_chunk_ids is not None:
+        retrieved_ids  = [r['chunk_id'] for r in retrieved_results]
+        gt_metrics     = evaluate_retrieval(retrieved_results, relevant_chunk_ids, k=k)
+        gt_metrics['latency_ms'] = latency_ms
+        metrics.update(gt_metrics)
 
-    if relevant_chunk_ids is None:
-        print(f'\nEVALUATION NOTE: query not found in TEST_QUERIES bank.')
-        print(f'  Latency: {latency_ms:.1f} ms  |  Retrieved: {retrieved_ids}')
-        return {'latency_ms': latency_ms}
-
-    metrics = evaluate_retrieval(retrieved_results, relevant_chunk_ids, k=k)
-    metrics['latency_ms'] = latency_ms
-
-    print_evaluation_report(
-        query=query,
-        metrics={k_: v for k_, v in metrics.items() if k_ != 'latency_ms'},
-        latency_ms=latency_ms,
-        relevant_chunk_ids=relevant_chunk_ids,
-        retrieved_ids=retrieved_ids,
-    )
+        print_ground_truth_report(
+            query=query,
+            metrics={k_: v for k_, v in gt_metrics.items() if k_ != 'latency_ms'},
+            latency_ms=latency_ms,
+            relevant_chunk_ids=relevant_chunk_ids,
+            retrieved_ids=retrieved_ids,
+        )
+    else:
+        print(
+            f'\n  [Ground-truth] Query not in TEST_QUERIES bank — '
+            f'add it with known relevant chunk IDs to enable Precision/Recall/MRR scoring.'
+        )
 
     return metrics
