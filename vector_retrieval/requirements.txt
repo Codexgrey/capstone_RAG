@@ -5,3 +5,5 @@ numpy
 matplotlib
 huggingface_hub
 python-dotenv
+pypdf
+python-docx
