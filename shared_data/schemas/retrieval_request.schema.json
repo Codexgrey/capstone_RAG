@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "retrieval_request.schema.json",
+  "title": "RetrievalRequest",
+  "description": "Standard request payload sent by the backend to any retrieval module. All three modules (vector, keyword, CLaRa) accept this exact input shape, routed from backend/app/api/query.py.",
+  "type": "object",
+  "required": ["query", "top_k", "method"],
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "The user's natural language question.",
+      "minLength": 1,
+      "example": "What are the main risks of RAG hallucination?"
+    },
+    "top_k": {
+      "type": "integer",
+      "description": "Number of top chunks to retrieve.",
+      "minimum": 1,
+      "default": 3,
+      "example": 3
+    },
+    "method": {
+      "type": "string",
+      "description": "Retrieval method to use. Determines which adapter is called in backend/app/retrieval/.",
+      "enum": ["vector", "keyword", "clara"],
+      "example": "vector"
+    },
+    "filters": {
+      "type": "object",
+      "description": "Optional filtering constraints applied before retrieval.",
+      "properties": {
+        "document_ids": {
+          "type": "array",
+          "description": "Restrict retrieval to these document IDs only. Empty list means no filter (search all).",
+          "items": { "type": "string" },
+          "example": ["doc-001", "doc-002"]
+        },
+        "file_types": {
+          "type": "array",
+          "description": "Restrict retrieval to documents of these file types.",
+          "items": {
+            "type": "string",
+            "enum": ["txt", "pdf", "docx", "md"]
+          },
+          "example": ["pdf"]
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "description": "Optional method-specific flags.",
+      "properties": {
+        "use_reranking": {
+          "type": "boolean",
+          "description": "Whether to apply a reranking pass after initial retrieval. Relevant for CLaRa.",
+          "default": false
+        }
+      }
+    }
+  },
+  "example": {
+    "query": "What are the main risks of RAG hallucination?",
+    "top_k": 3,
+    "method": "vector",
+    "filters": {
+      "document_ids": ["doc-001", "doc-002"]
+    },
+    "options": {
+      "use_reranking": false
+    }
+  }
+}

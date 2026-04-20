@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "chunk.schema.json",
+  "title": "Chunk",
+  "description": "Standard chunk record produced by any retrieval module's ingestion pipeline. All three retrieval methods (vector, keyword, CLaRa) index documents using this schema. Derived from vector_retrieval/src/utils/chunker.py.",
+  "type": "object",
+  "required": [
+    "chunk_id",
+    "document_id",
+    "document_title",
+    "source",
+    "text",
+    "metadata"
+  ],
+  "properties": {
+    "chunk_id": {
+      "type": "string",
+      "description": "Unique chunk identifier. Format: '<document_id>-chunk-<N>' (1-indexed). Example: 'doc-001-chunk-4'.",
+      "example": "doc-001-chunk-4"
+    },
+    "document_id": {
+      "type": "string",
+      "description": "Unique identifier for the source document. Format: 'doc-<NNN>' (zero-padded). Example: 'doc-001'.",
+      "example": "doc-001"
+    },
+    "document_title": {
+      "type": "string",
+      "description": "Human-readable document title. Derived from filename (underscores/hyphens replaced with spaces, title-cased).",
+      "example": "Feasibility Study Report"
+    },
+    "source": {
+      "type": "string",
+      "description": "Original filename of the source document.",
+      "example": "feasibility_study_report.pdf"
+    },
+    "chunk_index": {
+      "type": "integer",
+      "description": "Zero-based position of this chunk within its source document.",
+      "minimum": 0
+    },
+    "start_word_index": {
+      "type": "integer",
+      "description": "Word index in the source document where this chunk begins.",
+      "minimum": 0
+    },
+    "end_word_index": {
+      "type": "integer",
+      "description": "Word index in the source document where this chunk ends (exclusive).",
+      "minimum": 0
+    },
+    "word_count": {
+      "type": "integer",
+      "description": "Number of words in this chunk.",
+      "minimum": 1
+    },
+    "overlap": {
+      "type": "integer",
+      "description": "Number of words shared with the adjacent chunk (chunking parameter).",
+      "minimum": 0
+    },
+    "text": {
+      "type": "string",
+      "description": "Full text content of the chunk."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "File-level metadata extracted at ingestion time.",
+      "required": ["file_name", "file_type", "uploaded_at"],
+      "properties": {
+        "file_name": {
+          "type": "string",
+          "description": "Original filename including extension.",
+          "example": "feasibility_study_report.pdf"
+        },
+        "file_type": {
+          "type": "string",
+          "description": "File extension without leading dot.",
+          "enum": ["txt", "pdf", "docx", "md"],
+          "example": "pdf"
+        },
+        "file_size_kb": {
+          "type": "number",
+          "description": "File size in kilobytes, rounded to 2 decimal places.",
+          "minimum": 0
+        },
+        "uploaded_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp of when the document was loaded.",
+          "example": "2026-04-20T10:30:00+00:00"
+        }
+      }
+    }
+  },
+  "example": {
+    "chunk_id": "doc-001-chunk-4",
+    "document_id": "doc-001",
+    "document_title": "Feasibility Study Report",
+    "source": "feasibility_study_report.pdf",
+    "chunk_index": 3,
+    "start_word_index": 450,
+    "end_word_index": 600,
+    "word_count": 150,
+    "overlap": 30,
+    "text": "The RAG system is intended to support domain-specific question answering...",
+    "metadata": {
+      "file_name": "feasibility_study_report.pdf",
+      "file_type": "pdf",
+      "file_size_kb": 245.6,
+      "uploaded_at": "2026-04-20T10:30:00+00:00"
+    }
+  }
+}
