@@ -53,9 +53,9 @@ def build_and_save_index(
     np.save(chunks_path, np.array(chunk_records, dtype=object))
 
     print(
-        f"FAISS index saved to   : {index_path} \n"
-        f"Chunk records saved to : {chunks_path} \n"
-        f"Total vectors in index : {index.ntotal} \n"
+        f'  FAISS index saved to   : {index_path}\n'
+        f'  Chunk records saved to : {chunks_path}\n'
+        f'  Total vectors in index : {index.ntotal}\n'
     )
     return index
 
@@ -75,9 +75,9 @@ def load_index(index_path: str, chunks_path: str) -> tuple:
     """
     index         = faiss.read_index(index_path)
     chunk_records = np.load(chunks_path, allow_pickle=True).tolist()
-    
+
     print(
-        f"Index loaded from  : {index_path}  ({index.ntotal} vectors) \n"
-        f"Chunks loaded from : {chunks_path}  ({len(chunk_records)} records) \n"
+        f'  Index loaded from  : {index_path}  ({index.ntotal} vectors)\n'
+        f'  Chunks loaded from : {chunks_path}  ({len(chunk_records)} records)\n'
     )
     return index, chunk_records

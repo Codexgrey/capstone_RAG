@@ -3,26 +3,36 @@ src/retrieval/vector_adapter.py
 Backend-facing adapter for the Vector Retrieval module.
 
 This is the integration boundary between this module and the backend.
-It exposes a single clean function that matches the shared retrieval contract:
+It exposes two clean functions that together form the complete plug-in interface:
 
+    ingest(file_paths, document_ids, chunk_size, chunk_overlap) -> dict
     retrieve(query, top_k) -> dict
 
-The backend adapter layer (backend/app/retrieval/vector/) calls this function.
-It does not need to know about FAISS, SentenceTransformer, or chunk records —
-the adapter handles loading and state internally.
+The backend calls ingest() after a user uploads documents, then calls retrieve()
+to answer queries against the indexed content. Neither function exposes any
+internal implementation details (FAISS, SentenceTransformer, chunker, etc).
 
-Contract reference: shared_data/schemas/retrieval_response.schema.json
+The adapter manages all module-level state internally. The model is loaded once
+on the first call and reused across all subsequent calls for efficiency.
+
+Contract references:
+    shared_data/schemas/retrieval_request.schema.json
+    shared_data/schemas/retrieval_response.schema.json
 """
 
-import time
 import os
+import time
+from typing import Any
+
+from src.indexing.indexer import build_pipeline
 from src.indexing.vector_store import load_index
 from src.models.embedding_model import load_embedding_model
 from src.retrieval.retriever import retrieve as _retrieve
-from typing import Any
+
 
 # ---------------------------------------------------------------------------
-# persistence paths — must match indexer.py defaults
+# persistence paths — configurable via environment variables
+# must match indexer.py defaults when not overridden
 # ---------------------------------------------------------------------------
 INDEX_PATH  = os.environ.get('VECTOR_INDEX_PATH',  'faiss_index.bin')
 CHUNKS_PATH = os.environ.get('VECTOR_CHUNKS_PATH', 'chunk_records.npy')
@@ -40,7 +50,7 @@ _chunk_records = None
 def _load_state() -> None:
     """
     Load the embedding model and FAISS index into module-level state.
-    Called once on first retrieve() call (lazy initialisation).
+    Called lazily on first retrieve() call.
 
     Raises:
         FileNotFoundError: If the index or chunk records file does not exist.
@@ -55,12 +65,102 @@ def _load_state() -> None:
         _index, _chunk_records = load_index(INDEX_PATH, CHUNKS_PATH)
 
 
-def retrieve(query: str, top_k: int = 3) -> dict[str, Any]:
+def _reset_state() -> None:
+    """
+    Clear index state so retrieve() reloads from the new index on next call.
+    Called internally after ingest() rebuilds the index.
+    The model is preserved — no need to reload after re-indexing.
+    """
+    global _index, _chunk_records
+    _index         = None
+    _chunk_records = None
+
+
+# ---------------------------------------------------------------------------
+# public interface
+# ---------------------------------------------------------------------------
+
+def ingest(
+    file_paths: list,
+    chunk_size: int = 300,
+    chunk_overlap: int = 50,
+) -> dict:
+    """
+    Ingest one or more documents into the vector index.
+
+    This is called by the backend after a user uploads files.
+    It runs the full pipeline: load -> chunk -> embed -> FAISS index -> persist.
+    After ingestion, retrieve() will search this new index.
+
+    Args:
+        file_paths:    List of absolute or relative file paths to ingest.
+                       Supported types: .txt, .md, .pdf, .docx
+        chunk_size:    Number of words per chunk. Default: 300.
+        chunk_overlap: Number of overlapping words between adjacent chunks. Default: 50.
+
+    Returns:
+        Dict with ingestion summary:
+        {
+            "status":             "ok" | "error",
+            "documents_ingested": int,
+            "total_chunks":       int,
+            "index_path":         str,
+            "chunks_path":        str,
+            "latency_ms":         float,
+            "error":              str | None
+        }
+
+    Raises:
+        ValueError: If file_paths is empty.
+    """
+    if not file_paths:
+        raise ValueError('file_paths must contain at least one file path.')
+
+    start = time.perf_counter()
+
+    try:
+        index, chunk_records, _ = build_pipeline(
+            document_paths=file_paths,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            model_name=MODEL_NAME,
+            index_path=INDEX_PATH,
+            chunks_path=CHUNKS_PATH,
+        )
+
+        _reset_state()  # force retrieve() to reload the fresh index on next call
+
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+
+        return {
+            'status':             'ok',
+            'documents_ingested': len(file_paths),
+            'total_chunks':       len(chunk_records),
+            'index_path':         INDEX_PATH,
+            'chunks_path':        CHUNKS_PATH,
+            'latency_ms':         latency_ms,
+            'error':              None,
+        }
+
+    except Exception as e:
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        return {
+            'status':             'error',
+            'documents_ingested': 0,
+            'total_chunks':       0,
+            'index_path':         INDEX_PATH,
+            'chunks_path':        CHUNKS_PATH,
+            'latency_ms':         latency_ms,
+            'error':              str(e),
+        }
+
+
+def retrieve(query: str, top_k: int = 3) -> dict:
     """
     Retrieve the top-k most relevant chunks for a query.
 
-    This is the public interface for backend integration.
     Loads the model and index on first call; subsequent calls reuse state.
+    The index searched is always the most recently ingested one.
 
     Args:
         query:  Natural language question string.
@@ -71,23 +171,23 @@ def retrieve(query: str, top_k: int = 3) -> dict[str, Any]:
         {
             "query":      str,
             "method":     "vector",
-            "results":    list[dict],   # top-k chunks, ordered by score desc
+            "results":    list[dict],
             "latency_ms": float
         }
 
     Raises:
-        ValueError:       If query is empty.
+        ValueError:        If query is empty.
         FileNotFoundError: If index files are not found at configured paths.
     """
     _load_state()
 
-    start = time.perf_counter()
-    results = _retrieve(query, _model, _index, _chunk_records, top_k=top_k)
-    latency_ms = (time.perf_counter() - start) * 1000
+    start      = time.perf_counter()
+    results    = _retrieve(query, _model, _index, _chunk_records, top_k=top_k)
+    latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
     return {
         'query':      query,
         'method':     'vector',
         'results':    results,
-        'latency_ms': round(latency_ms, 2),
+        'latency_ms': latency_ms,
     }

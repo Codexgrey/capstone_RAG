@@ -1,17 +1,19 @@
 """
 src/indexing/indexer.py
 Orchestrates the full multi-document indexing pipeline:
-  scan folder → load → chunk → embed → build index → persist.
+  load -> chunk -> embed -> build index -> persist.
 """
 
 import os
+from typing import Tuple, List, Dict, Any
+
+import faiss
+import numpy as np
+
 from src.utils.loader import load_document, get_files_from_folder
 from src.utils.chunker import chunk_text_with_metadata
 from src.models.embedding_model import load_embedding_model, encode_chunks
 from src.indexing.vector_store import build_and_save_index
-from typing import Tuple, List, Dict, Any
-import faiss
-import numpy as np
 
 
 # Default persistence paths
@@ -50,9 +52,7 @@ def build_pipeline(
     all_chunk_records = []
     ingestion_log     = []
 
-    print('Starting ingestion...\n')
-    print('=' * 80)
-    
+    print(f'Starting ingestion...\n {"=" * 80}')
     for doc_index, path in enumerate(document_paths):
         doc_id    = f'doc-{doc_index + 1:03d}'
         doc_title = os.path.splitext(os.path.basename(path))[0]\
@@ -81,36 +81,35 @@ def build_pipeline(
             })
 
             print(
-                f"[{doc_id}] {doc_title} \n"
-                f"  File       : {file_metadata['file_name']} \n"
-                f"  Type       : {file_metadata['file_type']} \n"
-                f"  Size       : {file_metadata['file_size_kb']} KB \n"
-                f"  Characters : {len(text)} \n"
-                f"  Chunks     : {len(chunks)} \n"
+                f"[{doc_id}] {doc_title}\n"
+                f"  File       : {file_metadata['file_name']}\n"
+                f"  Type       : {file_metadata['file_type']}\n"
+                f"  Size       : {file_metadata['file_size_kb']} KB\n"
+                f"  Characters : {len(text)}\n"
+                f"  Chunks     : {len(chunks)}\n"
                 f"  Status     : OK\n"
             )
-        
+
         except Exception as e:
             ingestion_log.append({'document_id': doc_id, 'file_name': path, 'status': f'FAILED: {e}'})
-            print(
-                f"[{doc_id}] FAILED: {path}"
-                f"  Error: {e} \n"
-            )
+            print(f"[{doc_id}] FAILED: {path}\n  Error: {e}\n")
 
-    print('=' * 80)
     print(
-        f"Ingestion complete. \n"
-        f"Documents processed : {len(document_paths)} \n"
-        f"Total chunks        : {len(all_chunk_records)} \n"
+        f'{"=" * 80}\n'
+        f'Ingestion complete.\n'
+        f'  Documents processed : {len(document_paths)}\n'
+        f'  Total chunks        : {len(all_chunk_records)}\n'
     )
 
     print('Loading embedding model and encoding chunks...')
     embedding_model = load_embedding_model(model_name)
     chunk_texts     = [chunk['text'] for chunk in all_chunk_records]
     embeddings      = encode_chunks(embedding_model, chunk_texts)
-    
-    print(f'Embeddings shape : {embeddings.shape}')
-    print(f'Embedding dtype  : {embeddings.dtype}\n')
+
+    print(
+        f'  Embeddings shape : {embeddings.shape}\n'
+        f'  Embedding dtype  : {embeddings.dtype}\n'
+    )
 
     print('Building and saving FAISS index...')
     index = build_and_save_index(embeddings, all_chunk_records, index_path, chunks_path)
