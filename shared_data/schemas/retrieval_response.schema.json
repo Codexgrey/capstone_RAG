@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "retrieval_response.schema.json",
+  "title": "RetrievalResponse",
+  "description": "Standard response returned by any retrieval module to the backend adapter. All three modules (vector, keyword, CLaRa) return this exact shape. Derived from vector_retrieval/src/retrieval/retriever.py. The 'score' field meaning differs per method — see notes.",
+  "type": "object",
+  "required": ["query", "method", "results", "latency_ms"],
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "The original query string echoed back.",
+      "example": "What are the main risks of RAG hallucination?"
+    },
+    "method": {
+      "type": "string",
+      "description": "The retrieval method that produced this response.",
+      "enum": ["vector", "keyword", "clara"],
+      "example": "vector"
+    },
+    "results": {
+      "type": "array",
+      "description": "Top-k retrieved chunks ordered by score descending (rank 1 = best match).",
+      "items": {
+        "type": "object",
+        "required": ["rank", "chunk_id", "document_id", "document_title", "source", "text", "score", "citation", "metadata"],
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "description": "1-based rank position. Rank 1 is the most relevant result.",
+            "minimum": 1
+          },
+          "chunk_id": {
+            "type": "string",
+            "description": "Unique chunk identifier. Format: '<document_id>-chunk-<N>'.",
+            "example": "doc-001-chunk-4"
+          },
+          "document_id": {
+            "type": "string",
+            "description": "Source document identifier.",
+            "example": "doc-001"
+          },
+          "document_title": {
+            "type": "string",
+            "description": "Human-readable document title.",
+            "example": "Feasibility Study Report"
+          },
+          "source": {
+            "type": "string",
+            "description": "Original filename of the source document.",
+            "example": "feasibility_study_report.pdf"
+          },
+          "text": {
+            "type": "string",
+            "description": "Full text content of the retrieved chunk."
+          },
+          "score": {
+            "type": "number",
+            "description": "Relevance score. Range and meaning differ by method: vector = L2-derived similarity in (0, 1]; keyword = BM25 score (unbounded, higher is better); clara = method-specific confidence score. All are normalised so higher = more relevant.",
+            "example": 0.91
+          },
+          "citation": {
+            "type": "string",
+            "description": "Formatted citation string for display and LLM prompt injection. Format: '[<document_title> | <chunk_id>]'.",
+            "example": "[Feasibility Study Report | doc-001-chunk-4]"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "File-level metadata carried through from ingestion.",
+            "required": ["file_name", "file_type", "uploaded_at"],
+            "properties": {
+              "file_name":    { "type": "string" },
+              "file_type":    { "type": "string", "enum": ["txt", "pdf", "docx", "md"] },
+              "file_size_kb": { "type": "number" },
+              "uploaded_at":  { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    "latency_ms": {
+      "type": "number",
+      "description": "End-to-end retrieval latency in milliseconds.",
+      "minimum": 0,
+      "example": 42.9
+    }
+  },
+  "example": {
+    "query": "What are the main risks of RAG hallucination?",
+    "method": "vector",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": "doc-001-chunk-4",
+        "document_id": "doc-001",
+        "document_title": "Feasibility Study Report",
+        "source": "feasibility_study_report.pdf",
+        "text": "Retrieved chunk text here...",
+        "score": 0.91,
+        "citation": "[Feasibility Study Report | doc-001-chunk-4]",
+        "metadata": {
+          "file_name": "feasibility_study_report.pdf",
+          "file_type": "pdf",
+          "file_size_kb": 245.6,
+          "uploaded_at": "2026-04-20T10:30:00+00:00"
+        }
+      }
+    ],
+    "latency_ms": 42.9
+  }
+}
