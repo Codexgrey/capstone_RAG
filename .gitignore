@@ -52,6 +52,8 @@ chroma/
 faiss_index/
 *.faiss
 *.index
+faiss_index.bin
+chunk_records.npy
 
 # ===============================
 # Model caches
@@ -59,8 +61,7 @@ faiss_index/
 .cache/
 .huggingface/
 models/
-faiss_index.bin
-chunk_records.npy
+
 # ===============================
 # IDE
 # ===============================
