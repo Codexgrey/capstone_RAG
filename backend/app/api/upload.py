@@ -1,3 +1,5 @@
+import os
+from email.mime import text
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
@@ -6,7 +8,10 @@ from sqlalchemy.orm import Session
 from app.config.database import get_db
 from app.config.dependencies import get_current_user
 from app.models.db_models import User, Document, DocumentChunk, Log
+from app.services.file_service import save_upload_file, delete_file
 from app.ingestion.parser import extract_text
+from app.ingestion.chunker import chunk_text
+from app.ingestion.indexer import index_chunks
 
 router = APIRouter(tags=["Documents"])
 
@@ -80,7 +85,7 @@ async def process_document_background(
     try:
         #  Extract text 
         text = extract_text(filepath, file_type)
-        print(f"✅ Text extracted from {filename}")
+        print(f"  ✅ Text extracted from {filename}")
 
         #  Chunk the text 
         chunks = chunk_text(
@@ -88,7 +93,7 @@ async def process_document_background(
             document_id = document_id,
             source_name = filename
         )
-        print(f"✅ {len(chunks)} chunks created")
+        print(f"  ✅ {len(chunks)} chunks created")
 
         # Index chunks in ChromaDB 
         index_chunks(                                  
@@ -97,7 +102,7 @@ async def process_document_background(
             uploaded_by = username,
             file_type   = file_type
         )
-        print(f"✅ Chunks indexed in ChromaDB")
+        print(f"  ✅ Chunks indexed in ChromaDB")
 
         #  Save chunk metadata to PostgreSQL 
         for chunk in chunks:
@@ -127,8 +132,38 @@ async def process_document_background(
         db.commit()
         print(f"  ✅ Document {document_id} processing complete")
 
+        # ── Call Collins's FAISS ingest ────────────────────────────────────────
+        try:
+            # After OCR text extraction
+            txt_path = os.path.abspath(filepath.replace(".pdf", "_ocr.txt"))
+            if text and file_type == "pdf":
+                try:
+                    with open(txt_path, "w", encoding="utf-8") as f:
+                        f.write(text)
+                    collins_file_path = txt_path        # absolute txt path for Collins
+                except Exception as e:
+                    print(f"  ⚠️  Could not save OCR txt: {e}")
+                    collins_file_path = os.path.abspath(filepath)
+            else:
+                collins_file_path = os.path.abspath(filepath)
+            # Then pass collins_file_path to Collins's ingest:
+            try:
+                from app.retrieval.vector_adapter import ingest as collins_ingest
+
+                # Convert to absolute path — Collins changes directory internally
+                abs_filepath = os.path.abspath(collins_file_path)   # ← absolute path
+                result = collins_ingest(file_paths=[abs_filepath])
+
+                if result.get("status") == "ok":
+                    print(f"  ✅ Collins FAISS index updated: {result.get('total_chunks')} chunks")
+                else:
+                    print(f"  ⚠️  Collins ingest warning: {result.get('error')}")
+            except Exception as e:
+                print(f"  ⚠️  Collins ingest not ready: {e}")
+        except Exception as e:
+            print(f"  ⚠️  Collins ingest not ready: {e}")
     except Exception as e:
-        print(f"❌ Failed: {e}")
+        print(f"  ❌ Failed: {e}")
         try:
             doc = db.query(Document).filter(
                 Document.document_id == document_id
@@ -154,7 +189,7 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # List all documents uploaded by the current user.
+    """List all documents uploaded by the current user."""
     docs = db.query(Document)\
              .filter(Document.uploaded_by == current_user.id)\
              .order_by(Document.upload_date.desc())\
@@ -181,7 +216,7 @@ def get_document_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Check the processing status of a specific document.
+    """Check the processing status of a specific document."""
     doc = db.query(Document).filter(
         Document.document_id == document_id,
         Document.uploaded_by == current_user.id

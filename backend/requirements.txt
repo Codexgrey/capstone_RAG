@@ -1,7 +1,7 @@
 uvicorn
 fastapi
-postgresql
-postgresql-contrib #extra utilities
+#postgresql make sure it's installed on your system
+#postgresql-contrib #extra utilities
 # for Auth
 python-jose
 passlib
@@ -9,9 +9,18 @@ pydantic[email] # email validator
 bcrypt==4.0.1 # had some errors version mismatch between passlib and bcrypt
 # to parse multipart/form-data
 python-multipart
+sqlalchemy
+pypdf
+psycopg2
 # lightweight version
 chromadb
-sentence-transformers --no-deps
-transformers huggingface-hub tqdm numpy scikit-learn
+# install it seperately to avoid installing all the dependencies of sentence-transformers
+# sentence-transformers --no-deps
+transformers 
+huggingface-hub 
+tqdm 
+numpy 
+scikit-learn
 # for now testing with groq
 groq
+# pip install torch --index-url https://download.pytorch.org/whl/cpu
