@@ -1,12 +1,21 @@
-# takes raw LLM answer + retrieved chunks
-# builds the team’s shared output format:
-# "answer": final text from the model
-# "citations": list of sources/pages used
-# "retrieval_method": how chunks were pulled (e.g. vector/keyword)
-# "latency_ms": time taken for retrieval + generation
-# makes sure everything matches the answer_response schema exactly
-from typing import List, Dict, Any, Optional
+"""
+generation/response_formatter.py
+Formats the LLM answer into the team's shared answer_response contract.
 
+Matches answer_response.schema.json exactly:
+{
+    "query":            "What is RAG?",
+    "answer":           "RAG stands for...",
+    "evidence_used":    [...],
+    "citations":        [...],
+    "retrieval_method": "vector",
+    "latency_ms":       320.5,
+    "session_id":       "uuid..."
+}
+"""
+
+from typing import List, Dict, Any, Optional
+import re
 
 def format_response(
     answer: str,
@@ -14,20 +23,19 @@ def format_response(
     retrieval_method: str = "none",
     latency_ms: float = 0.0,
     session_id: str = None,
+    question: str = "",          # ← Collins contract requires this
 ) -> Dict[str, Any]:
-    # Format the final response matching the team's shared contract.
-    # "answer": model reply
-    # "citations": sources/pages
-    # "retrieval_method": vector/keyword/clara/none
-    # "latency_ms": time in ms
-    # "session_id": chat UUID
-    citations = _build_citations(chunks)
+
+    citations    = _build_citations(chunks)
+    evidence     = _build_evidence(chunks)
 
     response = {
-        "answer" : answer,
-        "citations" : citations,
-        "retrieval_method" : retrieval_method,
-        "latency_ms" : round(latency_ms, 2),
+        "query":            question,          # ← contract field
+        "answer":           answer,
+        "evidence_used":    evidence,          # ← contract field
+        "citations":        citations,
+        "retrieval_method": retrieval_method,
+        "latency_ms":       round(latency_ms, 2),
     }
 
     if session_id:
@@ -37,45 +45,79 @@ def format_response(
 
 
 def _build_citations(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    # Build citation objects from retrieved chunks.
-    # going to have chunk_id,, source_name, page, section (if available).
-    # Deduplicates citations by source_name + page so the same
-    # page is not cited twice even if multiple chunks came from it.
+    """
+    Build citations matching Collins's answer_response contract:
+    { chunk_id, document_title, source, file_type }
+
+    Also keeps source_name and page so SourcesPanel.tsx works without changes.
+    """
     citations = []
     seen = set()
 
     for chunk in chunks:
-        metadata = chunk.get("metadata", {})
-        source_name = chunk.get("source_name", "Unknown")
-        page = metadata.get("page", None)
-        chunk_id = chunk.get("chunk_id", "")
-        section = metadata.get("section", None)
+        metadata    = chunk.get("metadata", {})
+        source_name = _clean_source_name(chunk.get("source_name", "Unknown"))
+        chunk_id    = chunk.get("chunk_id", "")
+        page        = metadata.get("page", None)
+        section     = metadata.get("section", None)
 
-        # Deduplicate by source + page
-        key = f"{source_name}_{page}"
+        key = f"{source_name}_{chunk_id}"
         if key in seen:
             continue
         seen.add(key)
 
+        # Generate document_title from filename (Collins contract)
+        doc_title = _clean_source_name(source_name)\
+            .replace(".pdf",  "")\
+            .replace(".txt",  "")\
+            .replace(".docx", "")\
+            .replace(".md",   "")\
+            .replace("_",     " ")\
+            .title()
+
         citations.append({
-            "chunk_id" : chunk_id,
-            "source_name" : source_name,
-            "page" : page,
-            "section" : section,
+            # Collins contract fields
+            "chunk_id":       chunk_id,
+            "document_title": doc_title,
+            "source":         source_name,
+            "file_type":      metadata.get("file_type", ""),
+            # kept for SourcesPanel.tsx
+            "source_name":    source_name,
+            "page":           page,
+            "section":        section,
         })
 
     return citations
 
 
-def format_error_response(
-    error_message: str,
-    retrieval_method: str = "none",
-) -> Dict[str, Any]:
-    # Format an error response when something goes wrong.
-    # Returns a safe response the frontend can display.
+def _build_evidence(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Build evidence_used array per Collins's contract.
+    Shows which chunks contributed to the answer and a preview.
+    """
+    return [
+        {
+            "chunk_id":     chunk.get("chunk_id", ""),
+            "contribution": chunk.get("text", "")[:150] + "..."
+                            if len(chunk.get("text", "")) > 150
+                            else chunk.get("text", ""),
+        }
+        for chunk in chunks
+    ]
+
+
+def format_error_response(error_message: str, retrieval_method: str = "none") -> Dict[str, Any]:
     return {
-        "answer" : f"An error occurred: {error_message}",
-        "citations" : [],
-        "retrieval_method" : retrieval_method,
-        "latency_ms" : 0.0,
+        "query":            "",
+        "answer":           f"An error occurred: {error_message}",
+        "evidence_used":    [],
+        "citations":        [],
+        "retrieval_method": retrieval_method,
+        "latency_ms":       0.0,
     }
+
+def _clean_source_name(name: str) -> str:
+    """Remove OCR suffix and UUID prefix from filenames."""
+    name = name.replace("_ocr.txt", ".pdf").replace("_ocr", "")
+    name = re.sub(r'^[0-9a-f]{8}_', '', name)
+    return name
