@@ -1,372 +1,183 @@
 """
-keyword_adapter.py
-===================
-Location: keyword_retrieval/src/retrieval/keyword_adapter.py
+src/retrieval/keyword_adapter.py
+Backend-facing adapter for the Keyword Retrieval module.
 
-Shared adapter interface for the Keyword Retrieval module.
-This is the ONLY file the backend imports from this module.
+This is the integration boundary between this module and the backend.
+It exposes two clean functions that together form the complete plug-in interface:
 
-Implements the two-function plug-in interface defined in
-Shared_Contracts.docx Section 5:
+    ingest(file_paths, chunk_size, chunk_overlap) -> dict
+    retrieve(query, top_k) -> dict
 
-    ingest(file_paths, chunk_size, chunk_overlap)
-        Loads documents, chunks them, builds the inverted index
-        and BM25 model, persists state to disk.
+The backend calls ingest() after a user uploads documents, then calls retrieve()
+to answer queries against the indexed content. Neither function exposes any
+internal implementation details (BM25, inverted index, chunker, etc).
 
-    retrieve(query, top_k)
-        Searches the index using BM25 and returns results in the
-        exact shape defined by retrieval_response.schema.json.
+The adapter manages all module-level state internally. The index is loaded once
+on the first retrieve() call and reused across all subsequent calls for efficiency.
+After ingest() rebuilds the index, the adapter reloads it automatically on the
+next retrieve() call.
 
-Contract compliance checklist (Section 6):
-    ✓  ingest() and retrieve() importable from this adapter
-    ✓  ingest() returns status "ok" before retrieve() is called
-    ✓  retrieve() raises FileNotFoundError if called before ingest()
-    ✓  Response matches retrieval_response.schema.json exactly
-    ✓  score field present — higher = more relevant (BM25 score)
-    ✓  citation format: [Document Title | chunk_id]
-    ✓  metadata.file_type and metadata.uploaded_at on every result
-    ✓  latency_ms measured and included in every response
-    ✓  No LLM API calls anywhere in this module
+Contract references:
+    shared_data/schemas/retrieval_request.schema.json
+    shared_data/schemas/retrieval_response.schema.json
 """
 
+import os
 import time
-import pickle
-import datetime
-from pathlib import Path
+
+from src.indexing.indexer    import build_pipeline
+from src.indexing.bm25_store import load_bm25
+from src.retrieval.retriever import retrieve as _retrieve
 
 
-# =============================================================================
-# PERSISTENT STATE PATHS
-# The adapter saves its index to disk so it survives process restarts.
-# These paths sit next to the adapter file inside src/retrieval/.
-# =============================================================================
-
-_BASE_DIR        = Path(__file__).parent
-_INDEX_PATH      = _BASE_DIR / "keyword_index.pkl"   # inverted index
-_BM25_PATH       = _BASE_DIR / "keyword_bm25.pkl"    # BM25 model
-_CHUNKS_PATH     = _BASE_DIR / "keyword_chunks.pkl"  # chunk records
+# ---------------------------------------------------------------------------
+# persistence paths — configurable via environment variables
+# ---------------------------------------------------------------------------
+INDEX_PATH  = os.environ.get('KEYWORD_INDEX_PATH',  'keyword_index.pkl')
+BM25_PATH   = os.environ.get('KEYWORD_BM25_PATH',   'keyword_bm25.pkl')
+CHUNKS_PATH = os.environ.get('KEYWORD_CHUNKS_PATH', 'keyword_chunks.pkl')
 
 
-# =============================================================================
-# MODULE-LEVEL STATE
-# Loaded once on the first retrieve() call and reused for all subsequent calls.
-# After ingest() rebuilds the index, _needs_reload is set to True so the
-# next retrieve() call reloads fresh state from disk.
-# =============================================================================
-
-_inverted_index  = None
-_bm25            = None
-_chunk_records   = None
-_needs_reload    = False
-
-
-# =============================================================================
-# INTERNAL HELPERS
-# =============================================================================
-
-def _get_file_type(path: str) -> str:
-    """Return the lowercase file extension without the dot."""
-    return Path(path).suffix.lower().lstrip(".")
-
-
-def _now_utc() -> str:
-    """Return current UTC time as an ISO 8601 string."""
-    return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+# ---------------------------------------------------------------------------
+# module-level state — loaded once, reused across calls
+# ---------------------------------------------------------------------------
+_bm25          = None
+_index         = None
+_chunk_records = None
 
 
 def _load_state() -> None:
-    """Load the persisted index, BM25 model, and chunk records from disk."""
-    global _inverted_index, _bm25, _chunk_records, _needs_reload
+    """
+    Load the BM25 model, inverted index, and chunk records into module-level state.
+    Called lazily on first retrieve() call and after ingest() rebuilds the index.
 
-    if not _INDEX_PATH.exists() or not _BM25_PATH.exists() or not _CHUNKS_PATH.exists():
-        raise FileNotFoundError(
-            "No keyword index found. Call ingest(file_paths) first."
-        )
-
-    with open(_INDEX_PATH,  "rb") as f: _inverted_index = pickle.load(f)
-    with open(_BM25_PATH,   "rb") as f: _bm25           = pickle.load(f)
-    with open(_CHUNKS_PATH, "rb") as f: _chunk_records  = pickle.load(f)
-
-    _needs_reload = False
+    Raises:
+        FileNotFoundError: If the index files do not exist (ingest not yet called).
+    """
+    global _bm25, _index, _chunk_records
+    _bm25, _index, _chunk_records = load_bm25(BM25_PATH, INDEX_PATH, CHUNKS_PATH)
 
 
-def _save_state(inverted_index, bm25, chunk_records) -> None:
-    """Persist the index, BM25 model, and chunk records to disk."""
-    with open(_INDEX_PATH,  "wb") as f: pickle.dump(inverted_index, f)
-    with open(_BM25_PATH,   "wb") as f: pickle.dump(bm25,           f)
-    with open(_CHUNKS_PATH, "wb") as f: pickle.dump(chunk_records,  f)
+def _reset_state() -> None:
+    """
+    Clear index state so retrieve() reloads from the new index on next call.
+    Called internally after ingest() rebuilds the index.
+    """
+    global _bm25, _index, _chunk_records
+    _bm25          = None
+    _index         = None
+    _chunk_records = None
 
 
-# =============================================================================
-# PUBLIC INTERFACE — ingest()
-# =============================================================================
+# ---------------------------------------------------------------------------
+# public interface
+# ---------------------------------------------------------------------------
 
 def ingest(
-    file_paths:    list[str],
+    file_paths:    list,
     chunk_size:    int = 300,
     chunk_overlap: int = 50,
 ) -> dict:
     """
-    Load documents, chunk them, build the inverted index and BM25 model,
-    and persist everything to disk.
+    Ingest one or more documents into the keyword index.
 
-    Called by the backend after the user uploads documents.
-    After this call, retrieve() will search the newly built index.
+    Called by the backend after a user uploads files.
+    Runs the full pipeline: load -> chunk -> tokenise -> inverted index + BM25 -> persist.
+    After ingestion, retrieve() will search this new index.
 
-    All pipeline errors are caught internally — this function always
-    returns a dict and never raises.
+    Args:
+        file_paths:    List of absolute or relative file paths to ingest.
+                       Supported types: .txt, .md, .pdf, .docx
+        chunk_size:    Number of words per chunk. Default: 300.
+        chunk_overlap: Number of overlapping words between adjacent chunks. Default: 50.
 
-    Parameters
-    ----------
-    file_paths    : list[str]  absolute paths to uploaded files
-                               (.txt, .md, .pdf, .docx supported)
-    chunk_size    : int        words per chunk  (default: 300)
-    chunk_overlap : int        overlap between adjacent chunks  (default: 50)
+    Returns:
+        {
+            "status":             "ok" | "error",
+            "documents_ingested": int,
+            "total_chunks":       int,
+            "latency_ms":         float,
+            "error":              str | None
+        }
 
-    Returns
-    -------
-    {
-        "status":             "ok" | "error",
-        "documents_ingested": int,
-        "total_chunks":       int,
-        "latency_ms":         float,
-        "error":              str | None
-    }
+    Raises:
+        ValueError: If file_paths is empty.
     """
-    global _needs_reload
-    t_start = time.perf_counter()
+    if not file_paths:
+        raise ValueError('file_paths must contain at least one file path.')
+
+    start = time.perf_counter()
 
     try:
-        # Import pipeline modules
-        from utils.loader      import _FORMAT_LOADERS
-        from utils.chunker     import chunk_text_with_metadata
-        from preprocessing.preprocess import (
-            clean_text, detect_language, tokenize_chunk
+        chunk_records, _ = build_pipeline(
+            file_paths    = file_paths,
+            chunk_size    = chunk_size,
+            chunk_overlap = chunk_overlap,
+            index_path    = INDEX_PATH,
+            bm25_path     = BM25_PATH,
+            chunks_path   = CHUNKS_PATH,
         )
-        from indexing.indexer    import build_inverted_index
-        from indexing.bm25_store import build_bm25
 
-        all_chunk_records    = []
-        all_tokenized_chunks = []
-        uploaded_at          = _now_utc()
-        docs_ingested        = 0
+        _reset_state()  # force retrieve() to reload the fresh index on next call
 
-        for file_path in file_paths:
-            path = Path(file_path)
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
-            # ── Load ──────────────────────────────────────────────
-            ext = path.suffix.lower()
-            if ext not in _FORMAT_LOADERS:
-                # Skip unsupported formats silently
-                continue
-
-            try:
-                text = _FORMAT_LOADERS[ext](path)
-            except Exception:
-                continue
-
-            if not text or not text.strip():
-                continue
-
-            # ── Clean ─────────────────────────────────────────────
-            cleaned = clean_text(text)
-
-            # ── Detect language ───────────────────────────────────
-            lang_code, nltk_lang = detect_language(cleaned)
-
-            # ── Chunk ─────────────────────────────────────────────
-            doc_num   = docs_ingested + 1
-            doc_id    = f"doc-{doc_num:03d}"
-            doc_title = path.stem.replace("_", " ").replace("-", " ").title()
-
-            chunks = chunk_text_with_metadata(
-                cleaned,
-                chunk_size    = chunk_size,
-                overlap       = chunk_overlap,
-                document_title= doc_title,
-                source        = path.name,
-                document_id   = doc_id,
-                lang_code     = lang_code,
-            )
-
-            # Attach metadata required by the contract
-            for chunk in chunks:
-                chunk["metadata"] = {
-                    "file_name":    path.name,
-                    "file_type":    ext.lstrip("."),
-                    "file_size_kb": round(path.stat().st_size / 1024, 2),
-                    "uploaded_at":  uploaded_at,
-                }
-
-            # ── Tokenise ──────────────────────────────────────────
-            tokenized = [
-                tokenize_chunk(c["text"], nltk_lang)
-                for c in chunks
-            ]
-
-            all_chunk_records.extend(chunks)
-            all_tokenized_chunks.extend(tokenized)
-            docs_ingested += 1
-
-        if docs_ingested == 0:
-            return {
-                "status":             "error",
-                "documents_ingested": 0,
-                "total_chunks":       0,
-                "latency_ms":         round((time.perf_counter() - t_start) * 1000, 2),
-                "error":              "No supported files could be processed.",
-            }
-
-        # ── Build inverted index + BM25 ───────────────────────────
-        inverted_index = build_inverted_index(all_chunk_records, all_tokenized_chunks)
-        bm25           = build_bm25(all_tokenized_chunks)
-
-        # ── Persist to disk ───────────────────────────────────────
-        _save_state(inverted_index, bm25, all_chunk_records)
-        _needs_reload = True   # tell retrieve() to reload on next call
-
-        latency_ms = round((time.perf_counter() - t_start) * 1000, 2)
         return {
-            "status":             "ok",
-            "documents_ingested": docs_ingested,
-            "total_chunks":       len(all_chunk_records),
-            "latency_ms":         latency_ms,
-            "error":              None,
+            'status':             'ok',
+            'documents_ingested': len(file_paths),
+            'total_chunks':       len(chunk_records),
+            'latency_ms':         latency_ms,
+            'error':              None,
         }
 
     except Exception as e:
-        latency_ms = round((time.perf_counter() - t_start) * 1000, 2)
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
         return {
-            "status":             "error",
-            "documents_ingested": 0,
-            "total_chunks":       0,
-            "latency_ms":         latency_ms,
-            "error":              str(e),
+            'status':             'error',
+            'documents_ingested': 0,
+            'total_chunks':       0,
+            'latency_ms':         latency_ms,
+            'error':              str(e),
         }
 
-
-# =============================================================================
-# PUBLIC INTERFACE — retrieve()
-# =============================================================================
 
 def retrieve(query: str, top_k: int = 3) -> dict:
     """
-    Search the keyword index using BM25 and return results in the
-    standard retrieval_response.schema.json shape.
+    Retrieve the top-k most relevant chunks for a query using BM25.
 
-    Loads the model and index on the first call, then reuses them.
-    After ingest() rebuilds the index, automatically reloads on next call.
+    Loads the index on first call; subsequent calls reuse state.
+    The index searched is always the most recently ingested one.
 
-    Parameters
-    ----------
-    query : str   natural language question from the user
-    top_k : int   number of top chunks to return  (default: 3)
+    Args:
+        query:  Natural language question string.
+        top_k:  Number of top chunks to return. Default: 3.
 
-    Returns
-    -------
-    {
-        "query":      str,
-        "method":     "keyword",
-        "results": [
-            {
-                "rank":     int,
-                "chunk_id": str,
-                "text":     str,
-                "score":    float,     # BM25 score — higher = more relevant
-                "citation": str,       # [Document Title | chunk_id]
-                "metadata": {
-                    "file_name":    str,
-                    "file_type":    str,
-                    "file_size_kb": float,
-                    "uploaded_at":  str   # ISO 8601 UTC
-                }
-            },
-            ...
-        ],
-        "latency_ms": float
-    }
-
-    Raises
-    ------
-    FileNotFoundError
-        If called before any successful ingest().
-        The backend should guard against this and return HTTP 400 or 503.
-    ValueError
-        If query is empty or whitespace only.
-    """
-    global _inverted_index, _bm25, _chunk_records, _needs_reload
-
-    if not query or not query.strip():
-        raise ValueError("Query cannot be empty.")
-
-    t_start = time.perf_counter()
-
-    # ── Load state if needed ──────────────────────────────────────
-    if _bm25 is None or _needs_reload:
-        _load_state()   # raises FileNotFoundError if no index exists
-
-    # ── Tokenise query ────────────────────────────────────────────
-    from preprocessing.preprocess import tokenize_chunk, detect_language
-
-    lang_code, nltk_lang = detect_language(query)
-    query_tokens         = tokenize_chunk(query, nltk_lang)
-
-    if not query_tokens:
-        # All words were stopwords — return empty results
-        return {
-            "query":      query,
+    Returns:
+        Dict matching retrieval_response.schema.json:
+        {
+            "query":      str,
             "method":     "keyword",
-            "results":    [],
-            "latency_ms": round((time.perf_counter() - t_start) * 1000, 2),
+            "results":    list[dict],
+            "latency_ms": float
         }
 
-    # ── Score with BM25 ───────────────────────────────────────────
-    scores   = _bm25.get_scores(query_tokens)
-    safe_k   = min(top_k, len(_chunk_records))
-    top_idxs = sorted(
-        range(len(scores)),
-        key     = lambda i: scores[i],
-        reverse = True,
-    )[:safe_k]
+    Raises:
+        ValueError:        If query is empty.
+        FileNotFoundError: If index files are not found (ingest not yet called).
+    """
+    if not query or not query.strip():
+        raise ValueError('query cannot be empty.')
 
-    # ── Build results array ───────────────────────────────────────
-    results = []
-    for rank, chunk_idx in enumerate(top_idxs):
-        chunk = _chunk_records[chunk_idx]
-        score = float(scores[chunk_idx])
+    if _bm25 is None:
+        _load_state()
 
-        # Matched terms (for transparency — not in schema but harmless to compute)
-        matched = [
-            t for t in query_tokens
-            if t in _inverted_index
-            and any(
-                p["chunk_idx"] == chunk_idx
-                for p in _inverted_index[t]["postings"]
-            )
-        ]
-
-        results.append({
-            "rank":     rank + 1,
-            "chunk_id": chunk["chunk_id"],
-            "text":     chunk["text"],
-            "score":    score,
-            "citation": f"[{chunk['document_title']} | {chunk['chunk_id']}]",
-            "metadata": chunk.get("metadata", {
-                # Fallback if metadata was not attached during ingest
-                "file_name":    chunk.get("source", "unknown"),
-                "file_type":    Path(chunk.get("source", "")).suffix.lstrip("."),
-                "file_size_kb": 0.0,
-                "uploaded_at":  "unknown",
-            }),
-            # Internal field — useful for debugging, ignored by backend
-            "_matched_terms": matched,
-        })
-
-    latency_ms = round((time.perf_counter() - t_start) * 1000, 2)
+    start      = time.perf_counter()
+    results    = _retrieve(query, _bm25, _chunk_records, _index, top_k=top_k)
+    latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
     return {
-        "query":      query,
-        "method":     "keyword",
-        "results":    results,
-        "latency_ms": latency_ms,
+        'query':      query,
+        'method':     'keyword',
+        'results':    results,
+        'latency_ms': latency_ms,
     }
