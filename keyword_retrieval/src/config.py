@@ -10,7 +10,11 @@ such as API keys, model names, storage paths, and default values for chunking an
 # GROQ API — used for query normalisation (Step 7) and answer generation (Step 10)
 # =============================================================================
 
-GROQ_API_KEY      = "GROQ_API_KEY"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  
+GROQ_API_KEY      = os.environ.get("GROQ_API_KEY", "your_groq_api_key_here")
 
 # Model used to extract keywords from the user query (Step 7)
 QUERY_MODEL_NAME  = "llama-3.1-8b-instant"
