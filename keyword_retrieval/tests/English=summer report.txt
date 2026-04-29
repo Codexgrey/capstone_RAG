@@ -1,0 +1,930 @@
+ 
+ 
+CMPE300 
+TRAINING REPORT 
+10/06/2025 
+ 
+ 
+ 
+STUDENT 
+ 
+ 
+ 
+NAME        : OLIVIER BAGUMA 
+ 
+SURNAME: MUSHAGALUSA 
+ 
+          NUMBER   : 22118430 
+ 
+ 
+ 
+ 
+TRAINING PLACE 
+ 
+NAME                   : AI & IOT Research Center 
+ 
+          ADDRESS             : Mersin, Turkey, 99138 Lefkosa,  
+                                            Near East University Innovation Building 
+ 
+         TRAINING DATE:  Starting:  10/06/2025    
+                                           Completion:  05/08/2025 
+ 
+ 
+PHONE NO           : +90 542 852 0985  
+ 
+WEB ADDRESS   : https://neu.edu.tr/ 
+ 
+ 
+ 
+ 
+CYPRUS INTERNATIONAL UNIVERSITY 
+ 
+FACULTY OF ENGINEERING 
+COMPUTER ENGINEERING 
+ 
+
+
+2 
+ 
+Table of Contents 
+1 
+INTRODUCTION ......................................................................................................... 3 
+1.1 
+International Research Center for AI and IoT profile ....................................... 3 
+2 
+INFORMATION ABOUT THE COMPANY ............................................................... 4 
+2.1 
+Aim and establishment of the company ............................................................ 4 
+2.2 
+Departments and Personnel of the Company .................................................... 5 
+3 
+WORK EXPERIENCE .................................................................................................. 7 
+3.1 
+Problem Definition ............................................................................................ 7 
+3.2 
+Work Done ...................................................................................................... 10 
+3.2.1 
+UI Development and Theme System ........................................................... 10 
+3.2.2 
+Development of unique cover pages and Slide thumbnails:........................ 10 
+3.2.3 
+Implementation of Text Formatting and Image Management Features: ..... 11 
+3.2.4 
+Present Mode: .............................................................................................. 11 
+3.2.5 
+Save and Version Control Features ............................................................. 11 
+3.2.6 
+History in Slide view: .................................................................................. 11 
+3.2.7 
+Export and Sharing Features ....................................................................... 12 
+3.2.8 
+Backend Integration and API Development ................................................ 12 
+3.3 
+Limitations and Experience Gained ................................................................ 14 
+4 
+RECENT TOPICS IN THE CONTEXT OF WORK DONE ...................................... 17 
+5 
+CONCLUSION ............................................................................................................ 19 
+6 
+REFERENCES ............................................................................................................ 21 
+7 
+APPENDIX .................................................................................................................. 22 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+3 
+ 
+1 INTRODUCTION 
+This summer training report presents the activities I was involved in during my internship at 
+the international research center for AI and IoT . The main project I contributed to was the 
+development of an AI slide generator application which exposed me to the entire software 
+development lifecycle and provided me with valuable technical and professional experience. 
+1.1 International Research Center for AI and IoT profile  
+The international research center for AI and IoT was established at Near East University in 
+Cyprus as a place for innovation, advanced research and the development of technologies in 
+Artificial Intelligence (AI) and the Internet of Things (IoT). The center brings together 
+researchers, engineers and students to work as a team on projects that connect academic 
+research with real-world use. 
+It works in different areas including automation, smart systems, language technology and 
+data analysis. The center also trains students by giving them real hands-on experience in 
+software engineering, embedded systems and AI preparing them for future technical jobs 
+One of the center’s main goals is to build AI applications that make work easier and more 
+efficient. During my training period I work in the team of building AI slide generator is a 
+web tools that is going to work with a new educational robot called Prof. DUX is a module 
+of generating response and interactive slide pages from users inputs such as text, images and 
+other media and these slides are then displayed on the robot’s screen during its teaching 
+activities. 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+4 
+ 
+2 INFORMATION ABOUT THE COMPANY 
+My summer training took place at the International Research Center for AI and IoT at Near 
+East University .Details about the center and its divisions are explained in the following 
+subsections.  
+2.1 Aim and establishment of the company  
+The international research center for AI and IoT is a research center at Near East University 
+in North Cyprus. It was first created in 2007 as the Innovation and Information Technologies 
+Centre. Today, it focuses on AI, machine learning , IoT and other technologies. It aims to 
+link academic research with real needs of industry and to support technological growth in 
+Northern Cyprus and other regions [1]. 
+Smart education System AI Prof. Dux is a smart education system that uses AI to improve 
+teaching and learning. It was created using GPT-3.5 and GPT-4 by the Artificial Intelligence 
+and robotics institute and the international research center for AI and IoT. The system was 
+built in 2022–2023 and started working in classes in 2023–2024. It was initially used to teach 
+two courses in the AI Engineering Department and is now used in many faculties at Near 
+East University [1]. 
+The center’s mission is to create innovative systems that can be used directly in real-world 
+sectors like education, health, the environment and public services. It also works with 
+different departments at Near East University and other institutions to bring AI and IoT into 
+daily practical use. 
+The center uses modern computers, container tools and cloud systems to make projects 
+faster, scalable and easy to reproduce. Its working environment helps interns and researchers 
+learn real software engineering skills and this environment includes: 
+-Web development frameworks: React and Next.js are primarily used for building frontends, 
+enabling fast, flexible and maintainable applications.  
+-Programming Languages: TypeScript is utilized on the frontend for type safety and error 
+reduction, while Node.js and Python handle backend APIs and AI service integration. 
+
+
+5 
+ 
+-Database Systems: PostgreSQL and MongoDB store and manage data, with Prisma ORM 
+used for efficient data querying and organization. 
+-Containerization: Docker ensures applications run consistently across different 
+environments, avoiding dependency conflicts. 
+-Version control and Collaboration: Git with GitLab is employed for tracking code changes, 
+enabling code review, collaborative development and quality assurance. 
+2.2 Departments and Personnel of the Company 
+The International Research Center for AI and IoT at Near East University is organized into 
+two main departments: 
+Research and development department and Testing department. 
+ 
+Personnel of the center : The center consists of experienced professors, researchers and 
+developers who contribute to both academic and applied research. 
+ 
+Staff Information: Across both departments the center has 11 staff members. 
+Most personnel hold Master’s or PhD degrees in AI, Computer Engineering, Software 
+Engineering or related fields. 
+ 
+Their experience ranges from 3 to over 15 years in: 
+Artificial Intelligence, Internet of Things (IoT), Machine Learning, Robotics, Software 
+Engineering and Academic Researchs 
+ 
+The center is supervised by two directors: 
+- 
+Prof. Dr. Mustafa Kurt 
+- 
+Prof. Dr. Fadi Al-Turjman 
+ 
+Company Organigram: 
+Directors: Prof. Dr. Mustafa Kurt and Prof. Dr. Fadi Al-Turjman 
+ 
+ 
+ 
+
+
+6 
+ 
+ 
+Research and development and Testing department:  
+Researchers: Gresmarteneanos Tannous, Ibrahim Ame, Cliford Mlimwa, Usman Sarumi, 
+Farhaned Aryanejad, Clifford Peter and Nafiseh Yousefi Kiam (supervisor during my 
+training)  
+ 
+Testing department: Test Team: Zöhre Serttaş Yırtıcı and Sinem Alturjman 
+ 
+Each staff member contributes to different AI/IoT projects, system design, publications and 
+development activities within the university.  
+ 
+In figure 1, presents the company organizational chart which outlines the structure of the 
+organization and shows the main roles and reporting relationships within the company. 
+ 
+Development teams: 
+The development efforts are divided into Frontend and Backend teams: 
+-Frontend team: Focuses on the user interface of applications such as the AI Slide Generator. 
+Responsibilities include building responsive layouts, integrating presentation 
+themes, implementing state management with Redux, and enhancing user 
+experience. Key tools include React, Next.js, TypeScript and Tailwind CSS. 
+-Backend team: Handles server-side operations, including API development, database 
+management and user authentication. The backend ensures smooth communication 
+between applications and data storage. Key tools include Node.js, PostgreSQL, 
+Prisma ORM, and Docker. 
+Collaboration and Workflow: 
+The center applies agile methods, including sprint planning, daily stand-up meetings and 
+continuous code integration via GitLab. Communication takes place through digital 
+platforms, enabling real-time updates and effective collaboration. This structured 
+organization ensures the progressive and coordinated development of projects and allows 
+interns to discover modern software project organization, roles within a team, and agile 
+methodologies. 
+ 
+
+
+7 
+ 
+3 WORK EXPERIENCE 
+3.1 Problem Definition  
+ 
+During the internship, while working on the AI Slide Generator Project, an innovative 
+platform created to make the process of designing presentation slides faster and easier. The 
+system combined artificial intelligence with customization tools, allowing users to quickly 
+generate professional and ready-to-use presentation slides. 
+ 
+The main goals of the project were to: 
+-Build a user-friendly frontend interface where users could generate, save, customize slides 
+in real time. 
+-Develop a secure backend system to handle authentication, user data, history tracking, and 
+slide generation APIs. 
+-Integrate third-party services, such as OpenAI (for AI-generated content) and Unsplash (for 
+high-quality images). 
+-Use state management to save progress and ensure a smooth user experience when moving 
+between slides. 
+-Provide additional features like theme customization, export to PDF, history tracking, and 
+full-screen presentation mode to make the platform more versatile. 
+The roles were mainly in the frontend development team, with some exposure to backend 
+tasks. Key contributions included:  
+- 
+Developing theme customization features. 
+- 
+Implementing state management for better user experience. 
+- 
+Debugging and fixing errors to improve system stability. 
+- 
+Integrating APIs to connect frontend components with backend services. 
+- 
+Assisting with authentication handling. 
+- 
+Enhancing the UI/UX design to make the platform more intuitive. 
+Early Phase: Setup and Foundations 
+The first phase of the internship focused on getting familiar with the project’s tools, 
+technologies and working environment. This stage built the foundation for later 
+contributions to the AI Slide Generator project. 
+ 
+
+
+8 
+ 
+Key activities during this phase included: 
+o Project Introduction and Meetings: This phase involved initial discussions about the 
+project, its purpose and the specific features that would be implemented. Regular 
+meetings helped clarify expectations and ensured alignment with the project goals. 
+o Learning Node.js Backend and JavaScript: Since the project relied heavily on 
+backend development, time was dedicated to learning and strengthening skills in 
+Node.js and JavaScript. These technologies formed the core of the project’s server-
+side functionality [2]. 
+In figure 2, shows the certificate of achievement which was awarded at the end of the course 
+to officially recognize participation, effort and successful completion of the program. 
+ 
+o Docker Setup and Practice: Docker was introduced for containerization, allowing the 
+project environment to be consistent and easily deployable. Practicing Docker 
+commands and configurations helped in understanding how to run applications inside 
+containers [6]. 
+o TypeScript and Tailwind CSS Review: A brief review of TypeScript and Tailwind 
+CSS was necessary because both were used in the project's frontend development. 
+Revisiting these tools ensured smoother implementation during development [5-9]. 
+o Database Fundamentals: To prepare for managing and interacting with data, I 
+reviewed essential database concepts and notes. This helped reinforce understanding 
+of how data would be structured and accessed within the project. 
+ 
+During this phase, much of the focus was also on exploring and understanding the project’s 
+existing codebase. Reading through the structure of the backend, frontend, API routes and 
+database models provided a clearer picture of how different components worked together. 
+This exploration made it easier to identify where new features would be added later and it 
+also helped in recognizing coding patterns, naming conventions and best practices used by 
+the development team. 
+Another important part of this stage was setting up a productive workflow. This included 
+configuring the development environment, organizing files, installing necessary extensions 
+and ensuring compatibility across tools like Docker, Node.js and the framework being used. 
+Establishing these workflows early on saved time later and reduced technical interruptions 
+as the project grew in complexity. This careful preparation ensured that development could 
+progress efficiently and without unnecessary delays. 
+ 
+
+
+9 
+ 
+Architecture Discussions and Roadmap Alignment 
+After the setup phase, moved on to project planning and architecture discussions. This stage 
+was important for understanding how the AI Slide Generator was structured and how 
+individual tasks connected to the larger goals of the project. 
+ 
+Key activities included: 
+-Team Meetings and Roadmap Planning: Planning the project and decide how the work 
+would be divided and completed over the 6 to7 week period.  
+-System Architecture Review: Discussions about how the system worked as a whole, 
+including the communication between frontend and backend, scalability needs, and 
+integration with services like OpenAI, Unsplash and the project’s databases. 
+-Revisiting Next.js and Docker: To prepare for development work, reviewed Next.js 
+concepts and practiced running the project with Docker in both local and containerized 
+environments. This was useful for solving setup problems and keeping the project 
+consistent across different machines [6-7]. 
+-PostgreSQL with Prisma: Explored how PostgreSQL could be used with Prisma ORM for 
+managing backend data. This provided the foundation for later tasks involving features like 
+user authentication and history tracking [2]. 
+  
+During the architecture discussions, special attention was given to understanding how each 
+service interacted with the system. This included reviewing how API requests were handled, 
+how data flowed between the backend and database and how external services such as 
+OpenAI and Unsplash were integrated. These discussions were essential for building a 
+mental model of the entire application and for planning feature development in a way that 
+would not break existing functionality. 
+ 
+ 
+ 
+ 
+ 
+
+
+10 
+ 
+3.2 Work Done 
+The work was carried out according to a detailed five-phase roadmap over seven (7) weeks. 
+Below is a detailed breakdown of the development process and the contributions made: 
+ 
+3.2.1 UI Development and Theme System 
+One of the first major contributions was in user interface (UI) development, focusing on 
+building a presentation theme system. This feature gave users an easy way to change the 
+look and style of their slides [3]. 
+o Implementation of theme color: Created a set of predefined color swatches, each with 
+matching background and text colors. This allowed users to quickly apply a 
+professional design without needing advanced design skills. 
+In figure 3, the theme color implementation is presented. This figure illustrates how different 
+theme colors were applied and integrated into the presentation interface to improve visual 
+consistency and user customization. 
+ 
+o Implement images for each presentation theme : For an optimal user experience, 
+preview images have been integrated into all available presentation themes. This 
+feature allows users to see how the selected theme will look on their slides, 
+facilitating quick and intuitive decision-making. 
+In figure 4, the preview images for presentation themes are shown. This figure presents the 
+visual previews used to help users quickly compare and select the theme they prefer for their 
+presentation. 
+ 
+3.2.2 Development of unique cover pages and Slide thumbnails: 
+Designed and implemented a different cover page for each presentation theme. This ensured 
+that every theme had a unique visual identity, allowing users to quickly distinguish styles. 
+Worked on the Slide thumbnails feature which generates small preview images of the slides. 
+This allows users to easily understand how each slide will look before applying it, improving 
+both navigation and user experience [5-8]. 
+ 
+In figure 5, you can see the unique cover pages and slide thumbnails. This figure shows the 
+different cover designs and small slide previews made for each theme. 
+ 
+ 
+
+
+11 
+ 
+3.2.3 Implementation of Text Formatting and Image Management Features: 
+Improved text formatting features in the editor, allowing the application of common styles 
+such as bold, italics and underlining. A formatting toolbar has been added for easy access to 
+these options when selecting text [5-8]. 
+Image management has been integrated into the presentation editor, with options to replace 
+(upload a new image), delete, or Go back to the previous image. 
+Editing text directly on the slide has also been improved, allowing changes to be made 
+without opening a new window. This enhancement simplifies the editing process and makes 
+the interface more intuitive. 
+ 
+In Figure 6, you can see the text formatting toolbar and the image customization interface. 
+This figure shows the basic tools used to edit text and adjust images in the presentation. 
+3.2.4 Present Mode: 
+Implemented the Present Mode feature, which provides a live preview of how the 
+presentation will appear in full-screen mode. This functionality allows users to simulate the 
+actual presentation experience directly within the application, ensuring they can review slide 
+transitions, formatting, and overall layout before presenting [3-8]. 
+ 
+In figure 7, you can see the live presentation mode (full-screen preview). This figure shows 
+how the slides look when displayed in full screen during a presentation. 
+3.2.5 Save and Version Control Features 
+Implemented the Save Mode feature which records the current modifications of a 
+presentation into the presentation history log. This ensures that all changes are securely 
+stored, enabling users to track progress, go back to previous versions if needed. 
+ 
+In figure 8, you can see the save function and presentation history management. This figure 
+shows how users can save their work and view previous versions of their presentations. 
+ 
+3.2.6 History in Slide view: 
+Developed the history feature which displays all previously saved versions of a presentation. 
+Each version includes key details such as the date and time it was saved, the total number of 
+slides, and the selected theme. Users are provided with options to restore a past version, 
+
+
+12 
+ 
+delete a specific version or clear the entire history. This feature ensures better version control 
+and flexibility while working on presentations. 
+In figure 9, you can see the presentation history interface with version control options. This 
+figure shows how users can view past versions of their slides and choose which version they 
+want to keep or restore. 
+ 
+3.2.7 Export and Sharing Features 
+Implemented the export PDF feature, which allows users to instantly download their 
+presentation as a PDF file. This functionality enables easy offline access and sharing, 
+ensuring that presentations can be distributed or presented without requiring the application. 
+ 
+In figure 10, you can see the PDF export interface for downloading the presentation. This 
+figure shows how users can save their slides as a PDF file. 
+ 
+ 
+3.2.8 Backend Integration and API Development 
+This phase focused on establishing a reliable backend to support all frontend functionalities 
+through robust API communication, secure authentication and efficient data persistence. 
+Well-structured API endpoints were designed for user management, content display and 
+generation, with consistent models for error handling and debugging. 
+ 
+Extensive API testing and validation were performed using Postman, which facilitated 
+endpoint verification, request automation and debugging during the integration process. This 
+ensured the proper functioning of all backend routes and optimal communication with the 
+frontend. 
+OpenAI integration was implemented using advanced prompt engineering, a two-stage 
+content generation (slide structure and detailed notes) and validation systems to ensure the 
+quality and relevance of AI-generated content. Prisma ORM was employed for database 
+integration, enabling type-safe operations, optimized queries and a schema supporting users, 
+presentations, slides and themes [2]. 
+Key features included secure authentication and session management, comprehensive error 
+handling with smooth recovery, rate limiting to prevent abuse and caching strategies to 
+improve performance while ensuring data accuracy. Overall, this phase laid the foundation 
+for a scalable, secure and efficient system.  
+
+
+13 
+ 
+ 
+- 
+Frontend–Backend Integration: Established a complete connection 
+between the frontend and backend to ensure the proper functioning of 
+essential features, including login, registration, history management, 
+password recovery and presentation display. This integration enabled 
+seamless communication via APIs, allowing for the secure storage, retrieval 
+and synchronization of data within the application. 
+In figure 11, you can see the API integration between the frontend and backend for the 
+register function. This figure shows how the system sends and receives data to create a new 
+user account. 
+ 
+In figure 12, you can see the API integration between the frontend and backend for login and 
+signup. This figure shows how the system handles user authentication by sending and 
+receiving the necessary data. 
+ 
+In figure 13, you can see the API integration between the frontend and backend for 
+presentation history. This figure shows how the system sends and retrieves data to manage 
+the user’s saved presentations. 
+ 
+In figure 14, you can see the API integration between the frontend and backend for the 
+forgot-password feature. This figure shows how the system sends and receives the required 
+information to help users reset their password. 
+ 
+Throughout this phase, careful attention was also given to handling edge cases and 
+unexpected behaviors during API calls. This included validating user inputs, managing 
+invalid or expired tokens, preventing unauthorized access and ensuring that database 
+operations were executed safely under different conditions. Logging and monitoring tools 
+were used to trace errors, understand performance and improve backend reliability during 
+some scenarios. These practices contributed to establishing a more consistent and predictable 
+system behavior. 
+Additionally, continuous collaboration with the frontend team helped refine API responses, 
+adjust data formats and align endpoint structures with UI requirements. This iterative 
+communication ensured that both sides of the application evolved together and reduced 
+integration conflicts. By the end of this phase the backend not only supported all required 
+features but also provided a scalable architecture ready for future expansion such as 
+advanced analytics, personalization or additional AI-generator capabilities. 
+ 
+ 
+ 
+
+
+14 
+ 
+3.3 Limitations and Experience Gained 
+Problems Faced: During my internship, I encountered several limitations and technical 
+challenges while developing and integrating complex features into the AI Slide Generator 
+application. These difficulties allowed me to improve my technical problem-solving skills 
+and strengthen my teamwork abilities: 
+ 
+-Theme System Complexity: The implementation of multiple unique cover pages and 
+preview images for each presentation theme presented significant design and performance 
+challenges. Each theme was designed to keep fonts, colors and layout looking good and 
+working well on all devices. 
+Solution: The issue was resolved by modularizing the theme configuration files and 
+optimizing CSS layers in Tailwind. This allowed independent control of each theme’s visual 
+attributes and improved maintainability. 
+ 
+-Docker Performance Issues: Running Docker containers on local machines caused 
+performance degradation, particularly when multiple containers were active simultaneously. 
+This slowed down testing and debugging processes. 
+Solution: To overcome this, lightweight images were used, and unnecessary background 
+containers were disabled. Adjusting system resource allocation and leveraging .dockerignore 
+also enhanced performance. 
+ 
+-API communication errors: While connecting the frontend and backend, some endpoints 
+failed because of incorrect request data or mismatched authentication tokens. 
+Solution: Postman was used to test and automate the endpoints. Adding detailed error logs 
+and using consistent response formats made debugging easier and reduced integration 
+problems. 
+ 
+-OpenAI integration and response Validation: Integrating OpenAI APIs introduced 
+challenges in handling unpredictable or incomplete AI responses. Ensuring that generated 
+slide content met the project’s quality standards required advanced validation mechanisms. 
+Solution: A two-stage prompt system was introduced one for slide structure and another for 
+detailed notes combined with server-side validation checks to filter incomplete responses. 
+This significantly improved AI output accuracy and reliability. 
+
+
+15 
+ 
+-Collaboration and communication challenges: Working in a multidisciplinary team required 
+effective coordination and communication. Differences in coding styles and task priorities 
+occasionally slowed down progress. 
+Solution: The team adopted agile methodologies with daily stand-up meetings, regular sprint 
+reviews and collaborative debugging sessions. Version control using GitLab ensured smooth 
+integration and prevented conflicts between team members contributions. 
+ 
+In addition to the technical challenges adapting to a fast-paced development environment 
+proved difficult at first. Balancing multiple tasks, managing unexpected bugs and keeping 
+up with frequent updates required strong organizational skills. Over time these challenges 
+taught me how to prioritize tasks effectively and manage project requirements even under 
+constraints, ultimately increasing my resilience and adaptability as a developer. 
+ 
+What was missing/Lacking: Greater prior experience in full-stack development and 
+containerization could have reduced the initial setup time. Using more automated testing and 
+validation tools would have helped avoid some integration issues. My experience in AI 
+prompt engineering and results validation was also limited at the start of the internship. 
+Another important aspect that was lacking at the beginning was a deeper understanding of 
+software architecture patterns, such as layered structures. Having this knowledge beforehand 
+would have made it easier to navigate the codebase, understand dependencies and plan 
+feature implementation. Improving architectural awareness earlier would have significantly 
+reduced the time needed to get fully integrated into the technical workflow. 
+How work could have been done better: Planning and organizing the theme system from 
+the start would have reduced the amount of redesign needed. Preparing Docker environments 
+early and using lightweight images could have helped avoid performance issues. Adding 
+continuous integration for API testing would have made debugging faster and prevented 
+many endpoint errors. Also implementing clearer documentation from the beginning such as 
+API specifications, theme architecture diagrams, and setup guides would have helped 
+streamline 
+both 
+development 
+and 
+onboarding. 
+With 
+stronger 
+documentation 
+misunderstandings between team members could have been minimized and future 
+developers would have had an easier time contributing to the project with fewer 
+interruptions. 
+How more experience could have been gained: Taking additional online courses or 
+tutorials focused on AI integration, Docker optimization, and full-stack development best 
+
+
+16 
+ 
+practices would have been beneficial. Participating in code review and pair programming 
+sessions would have provided an opportunity to learn from the development methods of 
+experienced developers. Experimenting with advanced features such as multi-user 
+collaboration and mobile responsiveness during the internship could have enriched practical 
+knowledge. Gaining more experience could also have involved working more closely with 
+senior developers through mentorship sessions or shadowing their workflows. Observing 
+how experienced engineers approach design decisions handle debugging and plan 
+architectures would have accelerated learning and provided real-world exposure to industry 
+best practices. This type of guided experience would have enriched both technical and 
+professional growth. 
+Summary of learning 
+Gained practical experience in frontend and backend development using modern tools. 
+Improved problem-solving skills by debugging complex issues and optimizing system 
+performance. Strengthened teamwork, communication and time management abilities. 
+Learned how to integrate AI tools effectively while ensuring quality and reliability. 
+How this experience will help in the future: Although the AI Slide Generator met its main 
+objectives, several areas for improvement were identified. Addressing these will help make 
+the system more scalable and user-focused in future projects: 
+-System optimization: Performance could be improved by adding server-side caching and 
+optimizing image load times. Using lazy loading would also reduce initial load times and 
+make the overall user experience smoother. 
+-Enhanced AI functionality: Integrating a feedback-based AI learning mechanism would 
+allow the system to adapt to user preferences over time. This could be achieved by tracking 
+user modifications and using them to refine AI-generated slide content. 
+-Advanced collaboration features: Future updates could introduce multi-user collaboration, 
+allowing multiple users to edit or review presentations simultaneously. This would make the 
+application suitable for organizations, classrooms, or teams working remotely. 
+-Mobile Responsiveness and accessibility: While the current version performs well on 
+desktop environments, future development should focus on improving mobile compatibility. 
+Additionally, implementing accessibility features such as screen reader support and 
+keyboard navigation would make the platform inclusive for all users. 
+ 
+
+
+17 
+ 
+4 RECENT TOPICS IN THE CONTEXT OF WORK DONE 
+ 
+During my internship at the AI and IoT research center, I worked on developing a modern 
+web application: an AI slide generator. This project gave me practical experience with 
+current web development technologies, especially React, Next.js and Node.js backend 
+JavaScript which are now widely used to create scalable and easy-to-maintain applications. 
+Thanks to the book “React: The Complete Guide 2025” by Maximilian Schwarzmüller, I 
+improved my understanding of component-based development and advanced React concepts 
+like custom hooks, context and performance optimization. This allowed me to build efficient 
+features such as the theme customizer, options panel and slide preview. And the Mind Luster 
+course “Node.js backend JavaScript” where I got my certificate, I learned how to build 
+backend functions, create API routes, manage user data and connect the backend with the 
+frontend. These skills helped me work on login, registration, data saving and all 
+communication between the app and the server [2-8]. 
+ 
+UI design systems and User experience principles: I learned modern UI/UX practices from 
+Refactoring UI and used Tailwind CSS to design clean and responsive pages. I worked on 
+the theme customization feature, added preview images, created cover pages, and improved 
+tools like live presentation mode and text formatting. I also focused on accessibility and used 
+reusable components to make the UI easy to update and expand [3-5]. 
+API integration and full-stack collaboration: Through the project, I learned how to connect 
+the frontend and backend using APIs. I worked with authentication, email sending, image 
+search and database queries using Prisma. I created and tested several API routes in Postman. 
+This helped me understand how the frontend sends requests, how the backend processes 
+them, and why validation and error handling are important [2]. 
+Reflection on recent Technologies: This project helped me understand how modern tools 
+work together. React and Next.js build the UI, TypeScript makes the code safer, Tailwind 
+handles styling, Docker helps with deployment, Prisma manages the database and OpenAI 
+adds AI features. Using all these tools showed me how modern apps are built to be fast, 
+scalable and intelligent. 
+ 
+
+
+18 
+ 
+Personal Insights: This internship helped me see software development from a bigger 
+perspective. I learned how frontend, backend, design and deployment connect together. I 
+improved my skills in architecture, Git, testing and teamwork. It also confirmed my interest 
+in full-stack development and inspired me to keep learning about AI and modern cloud tools. 
+During this internship, I also learned how important AI tools are becoming in modern 
+software development. Working with OpenAI showed me how to create good prompts check 
+AI results and make sure the generated content is useful. This experience helped me 
+understand how AI can make apps smarter and easier to use and it gave me confidence to 
+work with AI in future projects. This internship combined with the courses and certificates 
+I completed gave me strong practical skills for my future career. By using tools like Next.js, 
+Tailwind CSS, Prisma, Docker and real API integration I learned how to build a complete 
+application from start to finish. These experiences prepared me well for full-stack 
+development and motivated me to keep improving my skills and learning new technologies. 
+
+
+19 
+ 
+5  CONCLUSION 
+ 
+The internship at the AI & IoT Research Center was one of the most valuable and 
+transformative experiences of my academic journey. From the first day, I was welcomed into 
+a professional environment that encouraged curiosity, innovation and teamwork. The center 
+offered a space where ideas could grow into real solutions, supported by a team that was 
+always willing to share knowledge. This experience gave me a clear understanding of how 
+a modern research and development organization functions. The balance of professionalism 
+and collaboration made it easy to learn and contribute. The center’s focus on Artificial 
+Intelligence and Internet of Things projects showed me how emerging technologies are used 
+to solve practical problems and turn research into real-world products. 
+The AI Slide Generator project which I worked on throughout my internship reflected this 
+innovative environment bringing together AI, web development and user design it 
+introduced me to modern technologies such as Next.js, TypeScript, Docker, Tailwind CSS 
+and Prisma. Each task helped me grow whether building user interfaces, integrating APIs or 
+managing data securely. One of the aspects I appreciated most was the strong learning 
+culture. My supervisor, Mrs. Nafiseh Kian, and my teammates were always supportive and 
+approachable. I felt comfortable asking questions and seeking guidance, which helped me 
+overcome challenges and learn effectively. This experience showed me the importance of 
+mentorship, communication, and teamwork in engineering. 
+Beyond technical skills, the internship strengthened my soft skills teamwork, adaptability 
+and problem-solving. Working in an agile environment taught me discipline, clear 
+communication and responsibility. These lessons extend far beyond coding and will benefit 
+me throughout my career. The overall atmosphere at the center was inspiring the 
+combination of research and practical development encouraged creativity and critical 
+thinking. I saw how complex problems can be approached systematically through 
+collaboration, proving that engineering is not only about technical expertise but also shared 
+purpose and teamwork. 
+Personally, this internship helped me grow into a more confident and independent engineer. 
+I learned how to approach challenges logically, test ideas effectively and improve through 
+
+
+20 
+ 
+feedback. I also discovered a strong interest in projects that combine AI with human-
+centered design where technology is used to improve everyday experiences. 
+In summary, my internship at the AI and IoT research center was not just a training period 
+it was a journey of growth and discovery. It strengthened my technical foundation, enhanced 
+my collaboration skills and clarified my career aspirations. I am sincerely grateful to the 
+center, my supervisor and my colleagues for their guidance, support and the welcoming 
+environment they provided. This experience confirmed my desire to continue developing 
+my skills in Artificial Intelligence and Software Engineering and I look forward to applying 
+the lessons learned to future projects and challenges. 
+ 
+ 
+ 
+
+
+21 
+ 
+6 REFERENCES 
+ 
+ 
+[1] Near East University Bulletin. (2024, Nov). International Research Center for AI and 
+IoT [Online]. Available: https://bulletin.neu.edu.tr/2024/11/26/international-research-
+center-for-ai-and-iot/ 
+ 
+[2] Mind Luster. (2025). Node js backend Javascript [Online]. Available: 
+https://www.mindluster.com/certificate/39/Node-js-back-end-JavaScript-video 
+ 
+[3] A. Wathan and S. Schoger. (2024). Refactoring UI [Online]. Available: 
+https://refactoringui.com/ 
+ 
+[4] OpenAI. (2025). GPT-4 Developer documentation [Online]. Available: 
+https://platform.openai.com/docs/ 
+ 
+[5] Tailwind CSS Team. (2025). Tailwind CSS documentation [Online]. Available: 
+https://tailwindcss.com/docs/ 
+ 
+[6] Docker Inc. (2025). Docker documentation [Online]. Available: 
+https://docs.docker.com/ 
+ 
+[7] NextAuth.js Team. (2025). NextAuth.js documentation [Online]. Available: 
+https://next-auth.js.org/ 
+ 
+[8] M. Schwarzmüller. (2025). Course: React the complete guide 2025 (incl. Next.js, 
+Redux) [Online]. Available: https://www.udemy.com/course/react-the-complete-guide-
+incl-redux/ 
+ 
+[9] M. Pocock. (2024). Total TypeScript [Online]. Available: https://totaltypescript.com/ 
+ 
+ 
+ 
+ 
+
+
+22 
+ 
+7 APPENDIX 
+ 
+ 
+ The organizational structure of the company is shown in Figure 1. 
+ 
+Figure 1: Company organizational chart 
+ 
+ The certificate awarded during the internship period is shown in Figure 2. 
+ 
+Figure 2: Certificate of achievement 
+ 
+ 
+
+
+23 
+ 
+ The implementation of theme color options within the application is shown in Figure 3. 
+ 
+ 
+Figure 3: Theme color implementation 
+ 
+ The preview images used for selecting presentation themes are shown in Figure 4. 
+ 
+Figure 4: Preview images for presentation themes 
+ 
+
+
+24 
+ 
+ The unique cover pages and slide thumbnails for different themes are shown in Figure 5. 
+ 
+Figure 5: Unique Cover Pages and Slide Thumbnails 
+ 
+ The text formatting tools and image customization interface are shown in Figure 6. 
+ 
+Figure 6: Text formatting toolbar and Image customization interface 
+
+
+25 
+ 
+ The full-screen live presentation preview is shown in Figures 7(a-b). 
+ 
+(a) Cover page in live view presentation  
+ 
+(b) Live view with all features (close, full screen, next, preview buttons) 
+ 
+Figure 7-(a): Live Presentation Mode (Cover page) 
+Figure 7-(b): Live Presentation Mode (Full-Screen Preview) 
+ 
+ The save feature and the presentation history management interface are shown in Figure 8. 
+ 
+Figure 8: Save Function and Presentation History Management 
+
+
+26 
+ 
+ The interface for viewing presentation history with version control options is shown in 
+Figure9. 
+ 
+Figure 9: Presentation History Interface with Version Control Options 
+ 
+ 
+ The interface used to export presentations as PDF files is shown in Figure 10. 
+ 
+Figure 10: PDF Export interface for presentation download 
+ 
+ 
+ 
+
+
+27 
+ 
+ The API integration for user registration is shown in Figures 11(a-b-c-d). 
+ 
+(a): API Integration for user registration 
+ 
+(b): In postman 
+ 
+(c): In Frontend  
+
+
+28 
+ 
+ 
+(d): User table in Backend after registration 
+ 
+Figure 11-(a): API Integration for user registration 
+Figure 11-(b): Registration in Postman 
+Figure 11-(c): Registration in Frontend 
+Figure 11-(d): User data adds in User table in backend after registration 
+ 
+ The API integration for the login and signup processes is shown in Figures 12(a-b). 
+ 
+(a): API Integration for Login and Signup 
+ 
+(b): In postman 
+
+
+29 
+ 
+Figure 12-(a): API Integration for Login and Signup 
+Figure 12-(b): Signup in Postman 
+ 
+ The API integration for retrieving presentations and their history is shown in Figures 13(a-
+b-c). 
+ 
+(a): API Integration for Presentation display and History 
+ 
+(b): In Postman 
+
+
+30 
+ 
+ 
+(c): In Frontend  
+ 
+Figure 13-(a): API Integration for Presentation display and History 
+Figure 13-(b): Test in Postman 
+Figure 13-(c):Test in Frontend  
+ 
+ The API integration for the password recovery feature is shown in Figures 14(a-b-c-d-e-f). 
+ 
+(a) API Integration for password recovery 
+
+
+31 
+ 
+ 
+(b) In Postman 
+ 
+(c) In Frontend Step 1 
+ 
+(d) Terminal Step 2  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+(e) Reset password window Step 3 
+
+
+32 
+ 
+ 
+(f) reset successfully step 4 
+ 
+Figure 14-(a): API Integration for password recovery (Forgot Password)  
+Figure 14-(b): Recovery process In Postman 
+Figure 14-(c): Recovery process In Frontend Step 1 
+Figure 14-(d): Link for reset password sent in Terminal Step 2  
+Figure 14-(e): Open the link in Frontend reset password window Step 3  
+Figure 14-(f): Password reset successfully step 4 
+ 
+ 
+ 
