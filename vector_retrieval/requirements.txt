@@ -1,0 +1,9 @@
+groq
+sentence-transformers
+faiss-cpu
+numpy
+matplotlib
+huggingface_hub
+python-dotenv
+pypdf
+python-docx

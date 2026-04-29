@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "answer_response.schema.json",
+  "title": "AnswerResponse",
+  "description": "Final answer returned by the backend generation layer (backend/app/generation/) to the frontend after LLM processing. Includes the generated answer, structured citations, the retrieval method used, and latency. Derived from vector_retrieval/src/utils/prompts.py and response_printer.py.",
+  "type": "object",
+  "required": ["query", "answer", "citations", "retrieval_method", "latency_ms"],
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "The original user query echoed back.",
+      "example": "What are the main risks of RAG hallucination?"
+    },
+    "answer": {
+      "type": "string",
+      "description": "The LLM-generated answer, grounded in the retrieved chunks. 2-4 sentences.",
+      "example": "The main risks of RAG hallucination include retrieval mismatch, incomplete context, and weak citation grounding."
+    },
+    "evidence_used": {
+      "type": "array",
+      "description": "Bullet-level breakdown of which chunks contributed what to the answer. Maps to the 'Evidence Used' section of the LLM prompt output.",
+      "items": {
+        "type": "object",
+        "required": ["chunk_id", "contribution"],
+        "properties": {
+          "chunk_id": {
+            "type": "string",
+            "description": "The chunk ID that contributed evidence.",
+            "example": "doc-001-chunk-4"
+          },
+          "contribution": {
+            "type": "string",
+            "description": "Brief description of what this chunk contributed to the answer.",
+            "example": "Described retrieval mismatch as a primary hallucination risk."
+          }
+        }
+      }
+    },
+    "citations": {
+      "type": "array",
+      "description": "Structured citations for all chunks referenced in the answer.",
+      "items": {
+        "type": "object",
+        "required": ["chunk_id", "document_title", "source"],
+        "properties": {
+          "chunk_id": {
+            "type": "string",
+            "example": "doc-001-chunk-4"
+          },
+          "document_title": {
+            "type": "string",
+            "example": "Feasibility Study Report"
+          },
+          "source": {
+            "type": "string",
+            "description": "Original filename.",
+            "example": "feasibility_study_report.pdf"
+          },
+          "file_type": {
+            "type": "string",
+            "enum": ["txt", "pdf", "docx", "md"]
+          }
+        }
+      }
+    },
+    "retrieval_method": {
+      "type": "string",
+      "description": "The retrieval method used to produce this answer.",
+      "enum": ["vector", "keyword", "clara"],
+      "example": "vector"
+    },
+    "latency_ms": {
+      "type": "number",
+      "description": "Total end-to-end latency in milliseconds (retrieval + generation).",
+      "minimum": 0,
+      "example": 1130
+    }
+  },
+  "example": {
+    "query": "What are the main risks of RAG hallucination?",
+    "answer": "The main risks of RAG hallucination include retrieval mismatch, incomplete context, and weak citation grounding.",
+    "evidence_used": [
+      {
+        "chunk_id": "doc-001-chunk-4",
+        "contribution": "Described retrieval mismatch as a primary hallucination risk."
+      }
+    ],
+    "citations": [
+      {
+        "chunk_id": "doc-001-chunk-4",
+        "document_title": "Feasibility Study Report",
+        "source": "feasibility_study_report.pdf",
+        "file_type": "pdf"
+      }
+    ],
+    "retrieval_method": "vector",
+    "latency_ms": 1130
+  }
+}
