@@ -1,0 +1,12 @@
+groq
+sentence-transformers
+faiss-cpu
+matplotlib
+huggingface_hub
+pypdf
+python-docx
+numpy
+rank-bm25
+nltk
+langdetect
+dotenv 
