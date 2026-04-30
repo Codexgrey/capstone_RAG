@@ -1,7 +1,7 @@
 def chunk_text_with_metadata(
     text,
     chunk_size=150,
-    overlap=30, # Le premier chunk va de 0 à 150 mots. Ensuite, on avance de 120 mots à chaque fois, ce qui fait que chaque chunk partage 30 mots avec le précédent pour garder le contexte.
+    overlap=30, # The first chunk goes from 0 to 150 words. Then, we advance by 120 words each time, which means that each chunk shares 30 words with the previous one to maintain context.
     document_title='Untitled',
     source='unknown',
     document_id='doc-000',
@@ -57,4 +57,4 @@ def chunk_text_with_metadata(
 
 
 
-# Chaque chunk = 150 mots  Mais : les 30 derniers mots du chunk 1 deviennent les 30 premiers mots du chunk 2
+# Each chunk = 150 words  But : the last 30 words of chunk 1 become the first 30 words of chunk 2
