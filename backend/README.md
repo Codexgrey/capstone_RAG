@@ -62,3 +62,16 @@ pip install groq
 ```
 That’s it Groq should run right away.
 If you don’t set up any backend, the system just stays in placeholder mode (hardcoded replies).
+
+## In addition for project root
+In .env add 
+RAG_PROJECT_ROOT = "/path/to/project
+
+## Frontend
+For frontend setup:
+In terminal go to /path/to/project/frotend
+```bash
+npm install -D tailwindcss@3 postcss autoprefixer daisyui@4
+npm install lucide-react react-hot-toast
+npx tailwindcss init -p
+```
