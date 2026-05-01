@@ -129,7 +129,7 @@ class ChatMessage(Base):
 
     # Filled in once retrieval modules connect, for now i just put the default to none
     retrieval_method = Column(
-        SAEnum("vector", "keyword", "clara", "none", name="retrieval_method_enum"),
+        SAEnum("vector", "keyword", "hybrid", "none", name="retrieval_method_enum"),
         nullable=True, default=None
     )
     source_chunk_ids = Column(Text, nullable=True,

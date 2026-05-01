@@ -24,3 +24,5 @@ scikit-learn
 # for now testing with groq
 groq
 # pip install torch --index-url https://download.pytorch.org/whl/cpu
+pdf0image
+pytesseract

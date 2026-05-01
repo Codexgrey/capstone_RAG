@@ -132,36 +132,59 @@ async def process_document_background(
         db.commit()
         print(f"  ✅ Document {document_id} processing complete")
 
-        # ── Call Collins's FAISS ingest ────────────────────────────────────────
-        try:
-            # After OCR text extraction
-            txt_path = os.path.abspath(filepath.replace(".pdf", "_ocr.txt"))
-            if text and file_type == "pdf":
-                try:
-                    with open(txt_path, "w", encoding="utf-8") as f:
-                        f.write(text)
-                    collins_file_path = txt_path        # absolute txt path for Collins
-                except Exception as e:
-                    print(f"  ⚠️  Could not save OCR txt: {e}")
-                    collins_file_path = os.path.abspath(filepath)
-            else:
-                collins_file_path = os.path.abspath(filepath)
-            # Then pass collins_file_path to Collins's ingest:
+        # ── Ingest into all three retrieval indexes ───────────────────────────
+        #
+        # Resolve the file path to pass to each module:
+        #   - PDFs are saved as OCR .txt for Collins (he reads .txt natively)
+        #   - Olivier and Nathan read the original file directly (support .pdf)
+        #
+        abs_filepath = os.path.abspath(filepath)
+
+        # For Collins: save OCR text as .txt so his loader picks it up cleanly
+        if text and file_type == "pdf":
+            txt_path = abs_filepath.replace(".pdf", "_ocr.txt")
             try:
-                from app.retrieval.vector_adapter import ingest as collins_ingest
-
-                # Convert to absolute path — Collins changes directory internally
-                abs_filepath = os.path.abspath(collins_file_path)   # ← absolute path
-                result = collins_ingest(file_paths=[abs_filepath])
-
-                if result.get("status") == "ok":
-                    print(f"  ✅ Collins FAISS index updated: {result.get('total_chunks')} chunks")
-                else:
-                    print(f"  ⚠️  Collins ingest warning: {result.get('error')}")
+                with open(txt_path, "w", encoding="utf-8") as f:
+                    f.write(text)
+                collins_file_path = txt_path
             except Exception as e:
-                print(f"  ⚠️  Collins ingest not ready: {e}")
+                print(f"  ⚠️  Could not save OCR txt: {e}")
+                collins_file_path = abs_filepath
+        else:
+            collins_file_path = abs_filepath
+
+        # 1. Collins — FAISS vector index
+        try:
+            from app.retrieval.vector_adapter import ingest as collins_ingest
+            result = collins_ingest(file_paths=[collins_file_path])
+            if result.get("status") == "ok":
+                print(f"  ✅ Collins FAISS: {result.get('total_chunks')} total chunks")
+            else:
+                print(f"  ⚠️  Collins ingest: {result.get('error')}")
         except Exception as e:
-            print(f"  ⚠️  Collins ingest not ready: {e}")
+            print(f"  ⚠️  Collins ingest failed: {e}")
+
+        # 2. Olivier — BM25 keyword index
+        try:
+            from app.retrieval.keyword_adapter import ingest as olivier_ingest
+            result = olivier_ingest(file_paths=[abs_filepath])
+            if result.get("status") == "ok":
+                print(f"  ✅ Olivier BM25: {result.get('total_chunks')} total chunks")
+            else:
+                print(f"  ⚠️  Olivier ingest: {result.get('error')}")
+        except Exception as e:
+            print(f"  ⚠️  Olivier ingest failed: {e}")
+
+        # 3. Nathan — Hybrid FAISS+BM25+RRF index
+        try:
+            from app.retrieval.hybrid_adapter import ingest as nathan_ingest
+            result = nathan_ingest(file_paths=[abs_filepath])
+            if result.get("status") == "ok":
+                print(f"  ✅ Nathan hybrid: {result.get('total_chunks')} total chunks")
+            else:
+                print(f"  ⚠️  Nathan ingest: {result.get('error')}")
+        except Exception as e:
+            print(f"  ⚠️  Nathan ingest failed: {e}")
     except Exception as e:
         print(f"  ❌ Failed: {e}")
         try:
