@@ -20,6 +20,9 @@ class Settings:
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
     STORAGE_PATH: str = os.getenv("STORAGE_PATH", "./storage/documents")
     CHROMA_PERSIST_DIR: str = os.getenv("CHROMA_PERSIST_DIR", "./chroma_storage")
+    # Root of the monorepo — parent of backend/, vector_retrieval/, keyword_retrieval/, hybrid_retrieval/
+    # Each teammate sets this in their own .env to match their local path
+    RAG_PROJECT_ROOT: str = os.getenv("RAG_PROJECT_ROOT", "")
 
     # Validation on startup
     def validate(self):
