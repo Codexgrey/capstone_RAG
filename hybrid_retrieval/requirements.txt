@@ -9,4 +9,7 @@ numpy
 rank-bm25
 nltk
 langdetect
-dotenv 
+python-dotenv
+scikit-learn
+tqdm
+requests

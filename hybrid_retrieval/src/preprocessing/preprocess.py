@@ -1,7 +1,7 @@
 import re
 import nltk
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
+from nltk.stem.snowball import SnowballStemmer
 from nltk.tokenize import word_tokenize
 from langdetect import detect
 
@@ -22,8 +22,16 @@ LANG_MAP = {
     'ar': 'arabic',
 }
 
-stemmer = PorterStemmer()
-
+# Using SnowballStemmer instead of PorterStemmer
+# for better multilingual support (English, French, German, Spanish, etc.)
+STEMMERS = {
+    "english": SnowballStemmer("english"),
+    "french": SnowballStemmer("french"),
+    "german": SnowballStemmer("german"),
+    "spanish": SnowballStemmer("spanish"),
+    "italian": SnowballStemmer("italian"),
+    "portuguese": SnowballStemmer("portuguese"),
+}
 
 # Language Detection 
 def detect_language(text: str) -> tuple:
@@ -59,13 +67,16 @@ def tokenize_chunk(text: str, nltk_lang: str = 'english') -> list:
     Lowercase → tokenise → remove stopwords → stem.
     Returns a list of stemmed tokens.
     """
-    text   = text.lower()
+    text = text.lower()
     tokens = word_tokenize(text)
 
     try:
         stop_words = set(stopwords.words(nltk_lang))
     except OSError:
         stop_words = set(stopwords.words('english'))
+
+    # Use correct stemmer based on language
+    stemmer = STEMMERS.get(nltk_lang, STEMMERS["english"])
 
     tokens = [
         stemmer.stem(t)

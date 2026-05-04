@@ -1,5 +1,5 @@
 import faiss
-import numpy as np
+import numpy as np 
 
 def build_and_save_index(embeddings, chunk_records, index_path, chunks_path):
     """

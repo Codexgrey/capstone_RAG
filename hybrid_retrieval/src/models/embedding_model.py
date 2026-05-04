@@ -2,7 +2,7 @@ from sentence_transformers import SentenceTransformer
 
 def load_embedding_model(model_name='all-MiniLM-L6-v2'):
     """
-    Loads the sentence-transformer embedding model.
+    Loads the sentence-transformer embedding model for sementic search.
     Returns the model ready to encode text.
     """
     try:

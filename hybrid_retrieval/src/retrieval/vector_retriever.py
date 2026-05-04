@@ -44,4 +44,4 @@ def retrieve(query, model, index, chunk_records, top_k=3):
             'metadata': chunk['metadata']
         })
 
-    return results
+    return results 

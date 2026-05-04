@@ -1,6 +1,5 @@
 from groq import Groq
-from preprocessing.preprocess import tokenize_chunk
-
+from src.preprocessing.preprocess import tokenize_chunk
 
 # Query Normaliser 
 def normalise_query(raw_query: str, groq_client: Groq, model_name: str) -> str:
