@@ -1,443 +1,300 @@
 import React, { useState, useEffect } from "react";
-import "./App.css";
+import { Toaster, toast } from "react-hot-toast";
 
-import Sidebar from "../components/SideBar";
-import ChatBox from "../components/ChatBox";
+import Sidebar      from "../components/SideBar";
+import ChatBox      from "../components/ChatBox";
 import ResponseCard from "../components/ResponseCard";
 import SourcesPanel from "../components/SourcesPanel";
-import Header from "../components/Header";
+import Header       from "../components/Header";
+import ChatHistory  from "../components/ChatHistory";
+import Admin        from "../components/admin";
 
-import { sendQuery } from "../services/queryService";
+import { login, logout, register } from "../services/authService";
+import { sendQuery }               from "../services/queryService";
+import { Mail, Lock, User as UserIcon } from "lucide-react";
 
-/* ================= TYPES ================= */
-type User = {
-  username: string;
-  password: string;
-  role: "admin" | "user";
-};
+type Theme    = "forest" | "raglight";
+type User     = { username: string; password: string; role: "admin"|"user"; };
+type Citation = { chunk_id: string; source_name: string; page: number; section: string|null; };
+type Latency  = { retrieval: number; llm: number; };
+type Message  = { id?: string; role: "user"|"assistant"; content: string; created_at?: string; retrieval_method?: string|null; };
 
-type Citation = {
-  chunk_id: string;
-  source_name: string;
-  page: number;
-  section: string | null;
-};
+/* ══════════════════════════════════════════════════════════
+   MAIN LAYOUT
+══════════════════════════════════════════════════════════ */
+function MainLayout({ response, setResponse, citations, setCitations, latency, setLatency,
+  onSend, onLogout, loading, currentUser, sessionId, setSessionId, method, setMethod,
+  menuOpen, setMenuOpen, showAdmin, setShowAdmin, theme, onThemeToggle, isAdmin }: any) {
 
-type Latency = {
-  retrieval: number;
-  llm: number;
-};
+  const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
+  const [refreshHistory,  setRefreshHistory]  = useState(0);
 
-/* =====================================================
-   USER MAIN PAGE
-===================================================== */
-function UserMainPage({
-  response,
-  citations,
-  latency,
-  onSend,
-  onLogout
-}: {
-  response: string;
-  citations: Citation[];
-  latency: Latency;
-  onSend: (query: string) => void;
-  onLogout: () => void;
-}) {
+  useEffect(() => { if (response) setHistoryMessages([]); }, [response]);
+
+  const handleLoadSession = (sid: string, messages: Message[]) => {
+    setSessionId(sid);
+    setHistoryMessages(messages);
+    setResponse("");
+  };
+
+  const handleNewChat = () => {
+    setSessionId(null); setHistoryMessages([]);
+    setResponse(""); setCitations([]); setLatency({ retrieval: 0, llm: 0 });
+    toast.success("New chat started");
+  };
+
+  const handleSend = async (query: string) => {
+    await onSend(query);
+    setRefreshHistory((n: number) => n + 1);
+    setHistoryMessages([]);
+  };
+
   return (
-    <div className="app">
-      <div className="layout">
-        <main className="main">
-          <Header setMenuOpen={() => {}} showMenu={false} />
+    <div className="min-h-screen bg-base-200">
+      {isAdmin && <Sidebar open={menuOpen} setOpen={setMenuOpen} setMethod={setMethod} />}
 
-          <div
-            style={{
-              position: "absolute",
-              right: 20,
-              top: 20
-            }}
-          >
-            <button onClick={onLogout}>Logout</button>
-          </div>
-
-          <ResponseCard response={response} />
-          <ChatBox onSend={onSend} />
-        </main>
-
-        <SourcesPanel
-          citations={citations}
-          latency_ms={latency.retrieval}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* =====================================================
-   ADMIN MAIN PAGE
-===================================================== */
-function AdminMainPage({
-  menuOpen,
-  setMenuOpen,
-  response,
-  citations,
-  latency,
-  onSend,
-  onLogout,
-  showAdmin,
-  setShowAdmin,
-  users,
-  newUser,
-  setNewUser,
-  newPass,
-  setNewPass,
-  role,
-  setRole,
-  addUser,
-  deleteUser,
-  setMethod
-}: any) {
-  return (
-    <div className="app">
-      <Sidebar
-        open={menuOpen}
-        setOpen={setMenuOpen}
-        setMethod={setMethod}
+      <Header
+        setMenuOpen={setMenuOpen} showMenu={isAdmin}
+        username={currentUser.username} onLogout={onLogout}
+        onAdminToggle={isAdmin ? () => setShowAdmin(!showAdmin) : undefined}
+        showAdmin={showAdmin} theme={theme} onThemeToggle={onThemeToggle}
       />
 
-      <div className="layout">
-        <main className="main">
-          <Header setMenuOpen={setMenuOpen} showMenu={true} />
+      <main className="max-w-7xl mx-auto p-6 mt-6">
+        {isAdmin && showAdmin ? (
+          <Admin onLogout={onLogout} />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-w-0">
 
-          <div
-            style={{
-              position: "absolute",
-              right: 20,
-              top: 20,
-              display: "flex",
-              gap: 10
-            }}
-          >
-            <button onClick={() => setShowAdmin(!showAdmin)}>
-              {showAdmin ? "Back to App" : "Admin Panel"}
-            </button>
-
-            <button onClick={onLogout}>Logout</button>
-          </div>
-
-          {!showAdmin ? (
-            <>
-              <ResponseCard response={response} />
-              <ChatBox onSend={onSend} />
-            </>
-          ) : (
-            <div className="admin-container">
-              <div className="admin-card">
-                <h3>Add User</h3>
-
-                <input
-                  placeholder="Username"
-                  value={newUser}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setNewUser(e.target.value)
-                  }
-                />
-
-                <input
-                  placeholder="Password"
-                  value={newPass}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setNewPass(e.target.value)
-                  }
-                />
-
-                <select
-                  value={role}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                    setRole(e.target.value)
-                  }
-                >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-
-                <button onClick={addUser}>Add User</button>
-              </div>
-
-              <div className="admin-card">
-                <h3>Users</h3>
-
-                <ul className="user-list">
-                  {users.map((u: User, i: number) => (
-                    <li key={i}>
-                      <span>
-                        {u.username} ({u.role})
-                      </span>
-
-                      <button onClick={() => deleteUser(i)}>
-                        Delete
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {/* Chat history — 1 col */}
+            <div className="lg:col-span-1 flex flex-col gap-4 min-w-0">
+              <ChatHistory
+                currentSessionId={sessionId}
+                onLoadSession={handleLoadSession}
+                onNewChat={handleNewChat}
+                refreshTrigger={refreshHistory}
+              />
             </div>
-          )}
-        </main>
 
-        <SourcesPanel
-          citations={citations}
-          latency_ms={latency.retrieval}
-        />
-      </div>
+            {/* Response + Chat input — 2 cols */}
+            <div className="lg:col-span-2 flex flex-col gap-6 min-w-0">
+              <ResponseCard response={response} loading={loading} messages={historyMessages} />
+              <ChatBox onSend={handleSend} loading={loading} />
+            </div>
+
+            {/* Sources — 1 col */}
+            <div className="lg:col-span-1 min-w-0">
+              <SourcesPanel citations={citations} latency_ms={latency.retrieval} />
+            </div>
+
+          </div>
+        )}
+      </main>
     </div>
   );
 }
 
-/* =====================================================
+/* ══════════════════════════════════════════════════════════
    APP
-===================================================== */
+══════════════════════════════════════════════════════════ */
 export default function App() {
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const [userResponse, setUserResponse] = useState("");
-  const [adminResponse, setAdminResponse] = useState("");
-
-  const [citations, setCitations] = useState<Citation[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-
-  const [latency, setLatency] = useState<Latency>({
-    retrieval: 0,
-    llm: 0
+  // ── Theme ──────────────────────────────────────────────
+  const [theme, setTheme] = useState<Theme>(() => {
+    return (localStorage.getItem("rag-theme") as Theme) || "forest";
   });
 
-  const [method, setMethod] = useState("keyword");
-
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-
-  const [showAdmin, setShowAdmin] = useState(false);
-
-  /* LOGIN */
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-
-  /* ADMIN */
-  const [newUser, setNewUser] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [role, setRole] = useState<"admin" | "user">("user");
-
-  /* INIT USERS */
   useEffect(() => {
-    const stored = localStorage.getItem("users");
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("rag-theme", theme);
+  }, [theme]);
 
-    if (!stored) {
-      const defaults: User[] = [
-        {
-          username: "admin",
-          password: "admin",
-          role: "admin"
-        },
-        {
-          username: "user",
-          password: "1234",
-          role: "user"
-        }
-      ];
+  const toggleTheme = () =>
+    setTheme(t => t === "forest" ? "raglight" : "forest");
 
-      localStorage.setItem("users", JSON.stringify(defaults));
-      setUsers(defaults);
-    } else {
-      setUsers(JSON.parse(stored));
-    }
+  // ── App state ───────────────────────────────────────────
+  const [menuOpen,   setMenuOpen]   = useState(false);
+  const [response,   setResponse]   = useState("");
+  const [citations,  setCitations]  = useState<Citation[]>([]);
+  const [sessionId,  setSessionId]  = useState<string|null>(null);
+  const [latency,    setLatency]    = useState<Latency>({ retrieval: 0, llm: 0 });
+  const [method,     setMethod]     = useState("vector");
+  const [currentUser,setCurrentUser]= useState<User|null>(null);
+  const [showAdmin,  setShowAdmin]  = useState(false);
+  const [loading,    setLoading]    = useState(false);
 
+  // ── Auth form ───────────────────────────────────────────
+  const [authMode,  setAuthMode]  = useState<"login"|"register">("login");
+  const [email,     setEmail]     = useState("");
+  const [password,  setPassword]  = useState("");
+  const [username,  setUsername]  = useState("");
+
+  // ── Init ────────────────────────────────────────────────
+  useEffect(() => {
     const saved = localStorage.getItem("currentUser");
     if (saved) setCurrentUser(JSON.parse(saved));
   }, []);
 
-  /* LOGIN */
-  const handleLogin = () => {
-    const user = users.find(
-      (u) =>
-        u.username === username &&
-        u.password === password
-    );
-
-    if (!user) {
-      alert("Invalid credentials");
-      return;
-    }
-
-    localStorage.setItem("currentUser", JSON.stringify(user));
-    setCurrentUser(user);
+  // ── Login ───────────────────────────────────────────────
+  const handleLogin = async () => {
+    if (!email || !password) { toast.error("Please enter your email and password"); return; }
+    try {
+      const result  = await login(email, password);
+      const isAdmin = ["admin@admin.com"].includes(email.toLowerCase());
+      const user: User = { username: result.user.username, password: "", role: isAdmin ? "admin" : "user" };
+      localStorage.setItem("currentUser", JSON.stringify(user));
+      setCurrentUser(user);
+      toast.success(`Welcome back, ${result.user.username}!`);
+    } catch { toast.error("Incorrect email or password"); }
   };
 
-  /* LOGOUT */
+  // ── Register ────────────────────────────────────────────
+  const handleRegister = async () => {
+    if (!username || !email || !password) { toast.error("All fields are required"); return; }
+    if (password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+    try {
+      await register(username, email, password);
+      toast.success("Account created! You can now log in.");
+      setAuthMode("login"); setUsername(""); setPassword("");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Registration failed");
+    }
+  };
+
+  // ── Logout ──────────────────────────────────────────────
   const handleLogout = () => {
-    localStorage.removeItem("currentUser");
-    setCurrentUser(null);
-    setShowAdmin(false);
-    setSessionId(null);
+    logout(); localStorage.removeItem("currentUser");
+    setCurrentUser(null); setShowAdmin(false);
+    setSessionId(null); setResponse(""); setCitations([]);
+    toast.success("Logged out");
   };
 
-  /* ================= CHAT ================= */
-
-  const handleUserSend = async (query: string) => {
+  // ── Query ───────────────────────────────────────────────
+  const handleSend = async (query: string) => {
+    setLoading(true);
     try {
-      const result = await sendQuery(
-        query,
-        sessionId || undefined,
-        method
-      );
-
-      setUserResponse(result.answer);
+      const result = await sendQuery(query, sessionId || undefined, method);
+      setResponse(result.answer);
       setSessionId(result.session_id);
-      setCitations(result.citations);
-
-      setLatency({
-        retrieval: result.latency_ms,
-        llm: 0
-      });
+      setCitations(result.citations || []);
+      setLatency({ retrieval: result.latency_ms, llm: 0 });
     } catch {
-      setUserResponse("Error contacting backend.");
-    }
+      setResponse("Error contacting backend.");
+      toast.error("Failed to get a response — is the backend running?");
+    } finally { setLoading(false); }
   };
 
-  const handleAdminSend = async (query: string) => {
-    try {
-      const result = await sendQuery(
-        query,
-        sessionId || undefined,
-        method
-      );
-
-      setAdminResponse(result.answer);
-      setSessionId(result.session_id);
-      setCitations(result.citations);
-
-      setLatency({
-        retrieval: result.latency_ms,
-        llm: 0
-      });
-    } catch {
-      setAdminResponse("Error contacting backend.");
-    }
-  };
-
-  /* ================= ADMIN USERS ================= */
-
-  const addUser = () => {
-    if (!newUser || !newPass) return;
-
-    const updated = [
-      ...users,
-      {
-        username: newUser,
-        password: newPass,
-        role
-      }
-    ];
-
-    setUsers(updated);
-    localStorage.setItem("users", JSON.stringify(updated));
-
-    setNewUser("");
-    setNewPass("");
-  };
-
-  const deleteUser = (index: number) => {
-    const updated = users.filter((_, i) => i !== index);
-
-    setUsers(updated);
-    localStorage.setItem("users", JSON.stringify(updated));
-  };
-
-  /* ================= LOGIN PAGE ================= */
-
-if (!currentUser) {
-  return (
-    <div className="centered">
-
-      {/* PAGE HEADER */}
-      <div className="login-page-header">
-        <img
-          src="/logo.jpg"
-          alt="Logo"
-          className="login-logo"
-        />
-
-        <h1 className="login-title">
-          RAG SYSTEM
-        </h1>
-      </div>
-
-      {/* LOGIN CARD */}
-      <div className="login-card">
-        <h2>Login</h2>
-
-        <input
-          placeholder="Username"
-          value={username}
-          onChange={(e) =>
-            setUsername(e.target.value)
-          }
-        />
-
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) =>
-            setPassword(e.target.value)
-          }
-        />
-
-        <button onClick={handleLogin}>
-          Login
-        </button>
-      </div>
-
-    </div>
-  );
-}
-
-  /* ================= USER PAGE ================= */
-
-  if (currentUser.role === "user") {
+  // ── AUTH PAGE ───────────────────────────────────────────
+  if (!currentUser) {
     return (
-      <UserMainPage
-        response={userResponse}
-        citations={citations}
-        latency={latency}
-        onSend={handleUserSend}
-        onLogout={handleLogout}
-      />
+      <>
+        <Toaster position="top-right" />
+        <div className="min-h-screen flex flex-col items-center justify-center bg-base-200 gap-6 p-4">
+
+          {/* Theme toggle on login page */}
+          <div className="absolute top-4 right-4">
+            <button className="btn btn-ghost btn-circle btn-sm" onClick={toggleTheme}
+              title={theme === "forest" ? "Switch to light mode" : "Switch to dark mode"}>
+              {theme === "forest"
+                ? <span className="text-yellow-400 text-lg">☀️</span>
+                : <span className="text-lg">🌙</span>}
+            </button>
+          </div>
+
+          {/* Logo + title */}
+          <div className="flex flex-col items-center gap-2">
+            <img src="/logo.jpg" alt="Logo" className="w-14 h-14 rounded-xl object-contain"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            <h1 className="text-4xl font-bold text-primary font-mono tracking-tight">RAG System</h1>
+            <p className="text-base-content/50 text-sm">Retrieval Augmented Generation</p>
+          </div>
+
+          {/* Auth card */}
+          <div className="card bg-base-100 border-t-4 border-[#00FF9D] w-full max-w-md hover:shadow-lg transition-all duration-200">
+            <div className="card-body gap-4">
+
+              {/* Tab switcher */}
+              <div className="tabs tabs-boxed">
+                <button className={`tab flex-1 ${authMode==="login"?"tab-active":""}`}
+                  onClick={() => setAuthMode("login")}>Login</button>
+                <button className={`tab flex-1 ${authMode==="register"?"tab-active":""}`}
+                  onClick={() => setAuthMode("register")}>Register</button>
+              </div>
+
+              {authMode === "login" ? (
+                <>
+                  <h2 className="card-title text-2xl justify-center">Welcome Back</h2>
+                  <label className="input input-bordered flex items-center gap-2">
+                    <Mail className="size-4 opacity-70" />
+                    <input type="email" className="grow" placeholder="Email"
+                      value={email} onChange={e => setEmail(e.target.value)}
+                      onKeyDown={e => e.key==="Enter" && handleLogin()} />
+                  </label>
+                  <label className="input input-bordered flex items-center gap-2">
+                    <Lock className="size-4 opacity-70" />
+                    <input type="password" className="grow" placeholder="Password"
+                      value={password} onChange={e => setPassword(e.target.value)}
+                      onKeyDown={e => e.key==="Enter" && handleLogin()} />
+                  </label>
+                  <div className="card-actions mt-2">
+                    <button className="btn btn-primary w-full" onClick={handleLogin}>Login</button>
+                  </div>
+                  <p className="text-center text-xs text-base-content/40">
+                    Admin: admin@admin.com / admin1234
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="card-title text-2xl justify-center">Create Account</h2>
+                  <label className="input input-bordered flex items-center gap-2">
+                    <UserIcon className="size-4 opacity-70" />
+                    <input type="text" className="grow" placeholder="Username"
+                      value={username} onChange={e => setUsername(e.target.value)}
+                      onKeyDown={e => e.key==="Enter" && handleRegister()} />
+                  </label>
+                  <label className="input input-bordered flex items-center gap-2">
+                    <Mail className="size-4 opacity-70" />
+                    <input type="email" className="grow" placeholder="Email"
+                      value={email} onChange={e => setEmail(e.target.value)}
+                      onKeyDown={e => e.key==="Enter" && handleRegister()} />
+                  </label>
+                  <label className="input input-bordered flex items-center gap-2">
+                    <Lock className="size-4 opacity-70" />
+                    <input type="password" className="grow" placeholder="Password (min 8 chars)"
+                      value={password} onChange={e => setPassword(e.target.value)}
+                      onKeyDown={e => e.key==="Enter" && handleRegister()} />
+                  </label>
+                  <div className="card-actions mt-2">
+                    <button className="btn btn-primary w-full" onClick={handleRegister}>
+                      Create Account
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </>
     );
   }
 
-  /* ================= ADMIN PAGE ================= */
-
+  // ── MAIN APP ─────────────────────────────────────────────
   return (
-    <AdminMainPage
-      menuOpen={menuOpen}
-      setMenuOpen={setMenuOpen}
-      response={adminResponse}
-      citations={citations}
-      latency={latency}
-      onSend={handleAdminSend}
-      onLogout={handleLogout}
-      showAdmin={showAdmin}
-      setShowAdmin={setShowAdmin}
-      users={users}
-      newUser={newUser}
-      setNewUser={setNewUser}
-      newPass={newPass}
-      setNewPass={setNewPass}
-      role={role}
-      setRole={setRole}
-      addUser={addUser}
-      deleteUser={deleteUser}
-      setMethod={setMethod}
-    />
+    <>
+      <Toaster position="top-right" />
+      <MainLayout
+        response={response}       setResponse={setResponse}
+        citations={citations}     setCitations={setCitations}
+        latency={latency}         setLatency={setLatency}
+        onSend={handleSend}       onLogout={handleLogout}
+        loading={loading}         currentUser={currentUser}
+        sessionId={sessionId}     setSessionId={setSessionId}
+        method={method}           setMethod={setMethod}
+        menuOpen={menuOpen}       setMenuOpen={setMenuOpen}
+        showAdmin={showAdmin}     setShowAdmin={setShowAdmin}
+        theme={theme}             onThemeToggle={toggleTheme}
+        isAdmin={currentUser.role === "admin"}
+      />
+    </>
   );
 }

@@ -5,7 +5,7 @@ export const sendQuery = async (
   sessionId?: string,
   retrievalMethod: string = 'vector'
 ) => {
-  const res = await apiClient.post('/query', {
+  const res = await apiClient.post('/api/query', {
     question,
     session_id:       sessionId || null,
     retrieval_method: retrievalMethod,
@@ -15,10 +15,10 @@ export const sendQuery = async (
 };
 
 export const getSessions = async () => {
-  const res = await apiClient.get('/chat/sessions');
+  const res = await apiClient.get('/api/chat/sessions');
   return res.data;
 };
 export const getSessionMessages = async (sessionId: string) => {
-  const res = await apiClient.get(`/chat/sessions/${sessionId}`);
+  const res = await apiClient.get(`/api/chat/sessions/${sessionId}`);
   return res.data;
 };
