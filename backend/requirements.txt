@@ -1,29 +1,41 @@
+# Backend — FastAPI RAG Orchestration
+# Install: pip install -r requirements.txt
+
+# ── Web framework ──────────────────────────────────────────────────────────
 uvicorn
 fastapi
-#postgresql make sure it's installed on your system
-#postgresql-contrib #extra utilities
-# for Auth
-python-jose
+python-multipart        # multipart/form-data (file uploads)
+pydantic[email]         # email validation
+
+# ── Auth ───────────────────────────────────────────────────────────────────
+python-jose             # JWT tokens
 passlib
-pydantic[email] # email validator
-bcrypt==4.0.1 # had some errors version mismatch between passlib and bcrypt
-# to parse multipart/form-data
-python-multipart
+bcrypt==4.0.1           # pinned: version mismatch between passlib and bcrypt
+
+# ── Database ───────────────────────────────────────────────────────────────
 sqlalchemy
-pypdf
-psycopg2
-# lightweight version
-chromadb
-# install it seperately to avoid installing all the dependencies of sentence-transformers
-# sentence-transformers --no-deps
-transformers 
-huggingface-hub 
-tqdm 
-numpy 
+psycopg2                # PostgreSQL adapter (requires libpq-dev on Linux)
+# postgresql must be installed separately on the system
+
+# ── Vector store ───────────────────────────────────────────────────────────
+chromadb                # lightweight in-process vector DB (fallback indexer)
+faiss-cpu               # Collins's FAISS index
+
+# ── Embeddings & ML ────────────────────────────────────────────────────────
+sentence-transformers
+transformers
+huggingface-hub
+tqdm
+numpy
 scikit-learn
-# for now testing with groq
-groq
-# pip install torch --index-url https://download.pytorch.org/whl/cpu
-pdf0image
-pytesseract
-faiss-cpu  # vector similarity search (Collins's FAISS index)
+
+# ── Document parsing ───────────────────────────────────────────────────────
+pypdf                   # PDF text extraction
+pdf2image               # PDF → image (for OCR fallback)
+pytesseract             # OCR on scanned PDFs (requires tesseract binary)
+
+# ── LLM ────────────────────────────────────────────────────────────────────
+groq                    # Groq API client (llama-3.1-8b-instant)
+
+# ── Config ─────────────────────────────────────────────────────────────────
+python-dotenv

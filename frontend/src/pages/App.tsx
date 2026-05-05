@@ -24,7 +24,7 @@ type Message  = { id?: string; role: "user"|"assistant"; content: string; create
 ══════════════════════════════════════════════════════════ */
 function MainLayout({ response, setResponse, citations, setCitations, latency, setLatency,
   onSend, onLogout, loading, currentUser, sessionId, setSessionId, method, setMethod,
-  menuOpen, setMenuOpen, showAdmin, setShowAdmin, theme, onThemeToggle, isAdmin }: any) {
+  menuOpen, setMenuOpen, showAdmin, setShowAdmin, theme, onThemeToggle, isAdmin, responseMethod }: any) {
 
   const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
   const [refreshHistory,  setRefreshHistory]  = useState(0);
@@ -51,10 +51,11 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
 
   return (
     <div className="min-h-screen bg-base-200">
-      {isAdmin && <Sidebar open={menuOpen} setOpen={setMenuOpen} setMethod={setMethod} />}
+      {/* Sidebar — visible to all users (upload + method also in ChatBox now) */}
+      <Sidebar open={menuOpen} setOpen={setMenuOpen} setMethod={setMethod} />
 
       <Header
-        setMenuOpen={setMenuOpen} showMenu={isAdmin}
+        setMenuOpen={setMenuOpen} showMenu={true}
         username={currentUser.username} onLogout={onLogout}
         onAdminToggle={isAdmin ? () => setShowAdmin(!showAdmin) : undefined}
         showAdmin={showAdmin} theme={theme} onThemeToggle={onThemeToggle}
@@ -79,12 +80,17 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
             {/* Response + Chat input — 2 cols */}
             <div className="lg:col-span-2 flex flex-col gap-6 min-w-0">
               <ResponseCard response={response} loading={loading} messages={historyMessages} />
-              <ChatBox onSend={handleSend} loading={loading} />
+              <ChatBox
+                onSend={handleSend}
+                loading={loading}
+                method={method}
+                setMethod={setMethod}
+              />
             </div>
 
             {/* Sources — 1 col */}
             <div className="lg:col-span-1 min-w-0">
-              <SourcesPanel citations={citations} latency_ms={latency.retrieval} />
+              <SourcesPanel citations={citations} latency_ms={latency.retrieval} retrieval_method={responseMethod} />
             </div>
 
           </div>
@@ -121,6 +127,7 @@ export default function App() {
   const [currentUser,setCurrentUser]= useState<User|null>(null);
   const [showAdmin,  setShowAdmin]  = useState(false);
   const [loading,    setLoading]    = useState(false);
+  const [responseMethod, setResponseMethod] = useState<string>("vector");
 
   // ── Auth form ───────────────────────────────────────────
   const [authMode,  setAuthMode]  = useState<"login"|"register">("login");
@@ -177,6 +184,7 @@ export default function App() {
       setSessionId(result.session_id);
       setCitations(result.citations || []);
       setLatency({ retrieval: result.latency_ms, llm: 0 });
+      setResponseMethod(result.retrieval_method || method);
     } catch {
       setResponse("Error contacting backend.");
       toast.error("Failed to get a response — is the backend running?");
@@ -286,6 +294,7 @@ export default function App() {
         response={response}       setResponse={setResponse}
         citations={citations}     setCitations={setCitations}
         latency={latency}         setLatency={setLatency}
+        responseMethod={responseMethod}
         onSend={handleSend}       onLogout={handleLogout}
         loading={loading}         currentUser={currentUser}
         sessionId={sessionId}     setSessionId={setSessionId}

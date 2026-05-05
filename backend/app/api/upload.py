@@ -132,59 +132,71 @@ async def process_document_background(
         db.commit()
         print(f"  ✅ Document {document_id} processing complete")
 
-        # ── Ingest into all three retrieval indexes ───────────────────────────
+        # ── Ingest into all three retrieval indexes (parallel) ────────────────
         #
-        # Resolve the file path to pass to each module:
-        #   - PDFs are saved as OCR .txt for Collins (he reads .txt natively)
-        #   - Olivier and Nathan read the original file directly (support .pdf)
+        # All three ingest() calls run concurrently in a thread pool so that
+        # the total upload time ≈ slowest module, not the sum of all three.
         #
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
         abs_filepath = os.path.abspath(filepath)
 
-        # For Collins: save OCR text as .txt so his loader picks it up cleanly
+        # Vector module reads .txt natively; pass extracted text for PDFs.
         if text and file_type == "pdf":
             txt_path = abs_filepath.replace(".pdf", "_ocr.txt")
             try:
                 with open(txt_path, "w", encoding="utf-8") as f:
                     f.write(text)
-                collins_file_path = txt_path
+                vector_file_path = txt_path
             except Exception as e:
                 print(f"  ⚠️  Could not save OCR txt: {e}")
-                collins_file_path = abs_filepath
+                vector_file_path = abs_filepath
         else:
-            collins_file_path = abs_filepath
+            vector_file_path = abs_filepath
 
-        # 1. Collins — FAISS vector index
-        try:
-            from app.retrieval.vector_adapter import ingest as collins_ingest
-            result = collins_ingest(file_paths=[collins_file_path])
-            if result.get("status") == "ok":
-                print(f"  ✅ Collins FAISS: {result.get('total_chunks')} total chunks")
-            else:
-                print(f"  ⚠️  Collins ingest: {result.get('error')}")
-        except Exception as e:
-            print(f"  ⚠️  Collins ingest failed: {e}")
+        def _run_vector():
+            try:
+                from app.retrieval.vector_adapter import ingest as _ingest
+                r = _ingest(file_paths=[vector_file_path])
+                if r.get("status") == "ok":
+                    print(f"  ✅ Vector (FAISS): {r.get('total_chunks')} total chunks")
+                else:
+                    print(f"  ⚠️  Vector ingest: {r.get('error')}")
+            except Exception as e:
+                print(f"  ⚠️  Vector ingest failed: {e}")
 
-        # 2. Olivier — BM25 keyword index
-        try:
-            from app.retrieval.keyword_adapter import ingest as olivier_ingest
-            result = olivier_ingest(file_paths=[abs_filepath])
-            if result.get("status") == "ok":
-                print(f"  ✅ Olivier BM25: {result.get('total_chunks')} total chunks")
-            else:
-                print(f"  ⚠️  Olivier ingest: {result.get('error')}")
-        except Exception as e:
-            print(f"  ⚠️  Olivier ingest failed: {e}")
+        def _run_keyword():
+            try:
+                from app.retrieval.keyword_adapter import ingest as _ingest
+                r = _ingest(file_paths=[abs_filepath])
+                if r.get("status") == "ok":
+                    print(f"  ✅ Keyword (BM25): {r.get('total_chunks')} total chunks")
+                else:
+                    print(f"  ⚠️  Keyword ingest: {r.get('error')}")
+            except Exception as e:
+                print(f"  ⚠️  Keyword ingest failed: {e}")
 
-        # 3. Nathan — Hybrid FAISS+BM25+RRF index
-        try:
-            from app.retrieval.hybrid_adapter import ingest as nathan_ingest
-            result = nathan_ingest(file_paths=[abs_filepath])
-            if result.get("status") == "ok":
-                print(f"  ✅ Nathan hybrid: {result.get('total_chunks')} total chunks")
-            else:
-                print(f"  ⚠️  Nathan ingest: {result.get('error')}")
-        except Exception as e:
-            print(f"  ⚠️  Nathan ingest failed: {e}")
+        def _run_hybrid():
+            try:
+                from app.retrieval.hybrid_adapter import ingest as _ingest
+                r = _ingest(file_paths=[abs_filepath])
+                if r.get("status") == "ok":
+                    print(f"  ✅ Hybrid (FAISS+BM25): {r.get('total_chunks')} total chunks")
+                else:
+                    print(f"  ⚠️  Hybrid ingest: {r.get('error')}")
+            except Exception as e:
+                print(f"  ⚠️  Hybrid ingest failed: {e}")
+
+        # Run all three in parallel using a thread pool
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = [
+                pool.submit(_run_vector),
+                pool.submit(_run_keyword),
+                pool.submit(_run_hybrid),
+            ]
+            for fut in futures:
+                fut.result()   # wait for all and surface exceptions
     except Exception as e:
         print(f"  ❌ Failed: {e}")
         try:
@@ -254,3 +266,36 @@ def get_document_status(
         "status" : doc.status,
         "upload_date" : doc.upload_date
     }
+
+@router.delete("/document/{document_id}", status_code=status.HTTP_200_OK)
+def delete_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a document and its chunks. Admin only."""
+    doc = db.query(Document).filter(
+        Document.document_id == document_id,
+        Document.uploaded_by == current_user.id
+    ).first()
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Delete file from disk
+    try:
+        delete_file(doc.filepath)
+    except Exception as e:
+        print(f"  ⚠️  Could not delete file: {e}")
+
+    # Delete from DB (chunks cascade via FK)
+    db.delete(doc)
+    db.add(Log(
+        user_id   = current_user.id,
+        action    = "document_deleted",
+        detail    = f"doc_id={document_id} file={doc.filename}",
+        timestamp = __import__('datetime').datetime.utcnow()
+    ))
+    db.commit()
+
+    return {"message": f"Document {document_id} deleted", "document_id": document_id}

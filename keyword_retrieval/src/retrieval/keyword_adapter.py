@@ -2,20 +2,13 @@
 src/retrieval/keyword_adapter.py
 Backend-facing adapter for the Keyword Retrieval module.
 
-This is the integration boundary between this module and the backend.
-It exposes two clean functions that together form the complete plug-in interface:
-
+Exposes two clean functions:
     ingest(file_paths, chunk_size, chunk_overlap) -> dict
     retrieve(query, top_k) -> dict
 
-The backend calls ingest() after a user uploads documents, then calls retrieve()
-to answer queries against the indexed content. Neither function exposes any
-internal implementation details (BM25, inverted index, chunker, etc).
-
-The adapter manages all module-level state internally. The index is loaded once
-on the first retrieve() call and reused across all subsequent calls for efficiency.
-After ingest() rebuilds the index, the adapter reloads it automatically on the
-next retrieve() call.
+Ingestion is INCREMENTAL: new documents are appended to the existing BM25
+index and chunk records. Re-uploading a file with the same filename replaces
+only that document's chunks (deduplication by source filename).
 
 Contract references:
     shared_data/schemas/retrieval_request.schema.json
@@ -23,50 +16,39 @@ Contract references:
 """
 
 import os
+import pickle
 import time
+import threading
 
-from src.indexing.indexer    import build_pipeline
-from src.indexing.bm25_store import load_bm25
-from src.retrieval.retriever import retrieve as _retrieve
-
+from indexing.indexer    import build_pipeline
+from indexing.bm25_store import load_bm25, build_bm25, save_bm25
+from retrieval.retriever import retrieve as _retrieve
 
 # ---------------------------------------------------------------------------
-# persistence paths — configurable via environment variables
+# persistence paths
 # ---------------------------------------------------------------------------
 INDEX_PATH  = os.environ.get('KEYWORD_INDEX_PATH',  'keyword_index.pkl')
 BM25_PATH   = os.environ.get('KEYWORD_BM25_PATH',   'keyword_bm25.pkl')
 CHUNKS_PATH = os.environ.get('KEYWORD_CHUNKS_PATH', 'keyword_chunks.pkl')
 
-
 # ---------------------------------------------------------------------------
-# module-level state — loaded once, reused across calls
+# module-level state
 # ---------------------------------------------------------------------------
 _bm25          = None
 _index         = None
 _chunk_records = None
+_lock          = threading.RLock()  # serialise state resets
 
 
-def _load_state() -> None:
-    """
-    Load the BM25 model, inverted index, and chunk records into module-level state.
-    Called lazily on first retrieve() call and after ingest() rebuilds the index.
-
-    Raises:
-        FileNotFoundError: If the index files do not exist (ingest not yet called).
-    """
+def _load_state():
     global _bm25, _index, _chunk_records
     _bm25, _index, _chunk_records = load_bm25(BM25_PATH, INDEX_PATH, CHUNKS_PATH)
 
 
-def _reset_state() -> None:
-    """
-    Clear index state so retrieve() reloads from the new index on next call.
-    Called internally after ingest() rebuilds the index.
-    """
+def _reset_state():
     global _bm25, _index, _chunk_records
-    _bm25          = None
-    _index         = None
-    _chunk_records = None
+    _bm25 = _index = _chunk_records = None
+_lock          = threading.RLock()  # serialise state resets
 
 
 # ---------------------------------------------------------------------------
@@ -79,29 +61,14 @@ def ingest(
     chunk_overlap: int = 50,
 ) -> dict:
     """
-    Ingest one or more documents into the keyword index.
+    Incrementally ingest one or more documents into the keyword index.
 
-    Called by the backend after a user uploads files.
-    Runs the full pipeline: load -> chunk -> tokenise -> inverted index + BM25 -> persist.
-    After ingestion, retrieve() will search this new index.
-
-    Args:
-        file_paths:    List of absolute or relative file paths to ingest.
-                       Supported types: .txt, .md, .pdf, .docx
-        chunk_size:    Number of words per chunk. Default: 300.
-        chunk_overlap: Number of overlapping words between adjacent chunks. Default: 50.
+    New documents are APPENDED. Re-uploading a file with the same filename
+    replaces only that document's chunks.
 
     Returns:
-        {
-            "status":             "ok" | "error",
-            "documents_ingested": int,
-            "total_chunks":       int,
-            "latency_ms":         float,
-            "error":              str | None
-        }
-
-    Raises:
-        ValueError: If file_paths is empty.
+        {"status": "ok"|"error", "documents_ingested": int,
+         "total_chunks": int, "latency_ms": float, "error": str|None}
     """
     if not file_paths:
         raise ValueError('file_paths must contain at least one file path.')
@@ -109,61 +76,83 @@ def ingest(
     start = time.perf_counter()
 
     try:
-        chunk_records, _ = build_pipeline(
+        # ── Load existing chunks if present ───────────────────────────────
+        if os.path.exists(CHUNKS_PATH):
+            with open(CHUNKS_PATH, 'rb') as f:
+                existing_chunks = pickle.load(f)
+        else:
+            existing_chunks = []
+
+        existing_sources = {c['source'] for c in existing_chunks}
+
+        # ── Build new chunks from provided files ──────────────────────────
+        new_chunk_records, _ = build_pipeline(
             file_paths    = file_paths,
             chunk_size    = chunk_size,
             chunk_overlap = chunk_overlap,
-            index_path    = INDEX_PATH,
-            bm25_path     = BM25_PATH,
-            chunks_path   = CHUNKS_PATH,
+            index_path    = '_tmp_index.pkl',   # temp — merged below
+            bm25_path     = '_tmp_bm25.pkl',
+            chunks_path   = '_tmp_chunks.pkl',
         )
 
-        _reset_state()  # force retrieve() to reload the fresh index on next call
+        # ── Determine which sources to replace ────────────────────────────
+        new_sources = {c['source'] for c in new_chunk_records}
+        kept_chunks = [c for c in existing_chunks
+                       if c['source'] not in new_sources]
+
+        all_chunks = kept_chunks + new_chunk_records
+
+        # ── Rebuild BM25 + inverted index over ALL chunks ─────────────────
+        from preprocessing.preprocess import tokenize_chunk, detect_language
+        from indexing.indexer import build_inverted_index
+
+        # Detect language from combined text sample
+        sample          = ' '.join(c['text'] for c in all_chunks[:20])
+        _, nltk_lang    = detect_language(sample)
+        tokenized       = [tokenize_chunk(c['text'], nltk_lang) for c in all_chunks]
+
+        new_index       = build_inverted_index(all_chunks, tokenized)
+        new_bm25        = build_bm25(tokenized)
+
+        # ── Persist merged state ──────────────────────────────────────────
+        with open(INDEX_PATH,  'wb') as f: pickle.dump(new_index,  f)
+        with open(CHUNKS_PATH, 'wb') as f: pickle.dump(all_chunks, f)
+        save_bm25(new_bm25, BM25_PATH)
+
+        # Clean up temp files
+        for tmp in ('_tmp_index.pkl', '_tmp_bm25.pkl', '_tmp_chunks.pkl'):
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+        with _lock:
+            _reset_state()  # force reload on next retrieve()
 
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        print(f'  ✅ Keyword index: {len(new_chunk_records)} new chunks, '
+              f'{len(kept_chunks)} kept, {len(all_chunks)} total')
 
         return {
             'status':             'ok',
             'documents_ingested': len(file_paths),
-            'total_chunks':       len(chunk_records),
+            'total_chunks':       len(all_chunks),
             'latency_ms':         latency_ms,
             'error':              None,
         }
 
     except Exception as e:
+        for tmp in ('_tmp_index.pkl', '_tmp_bm25.pkl', '_tmp_chunks.pkl'):
+            if os.path.exists(tmp):
+                os.remove(tmp)
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
-        return {
-            'status':             'error',
-            'documents_ingested': 0,
-            'total_chunks':       0,
-            'latency_ms':         latency_ms,
-            'error':              str(e),
-        }
+        return {'status': 'error', 'documents_ingested': 0, 'total_chunks': 0,
+                'latency_ms': latency_ms, 'error': str(e)}
 
 
 def retrieve(query: str, top_k: int = 3) -> dict:
     """
-    Retrieve the top-k most relevant chunks for a query using BM25.
+    Retrieve top-k chunks using BM25 keyword search.
 
-    Loads the index on first call; subsequent calls reuse state.
-    The index searched is always the most recently ingested one.
-
-    Args:
-        query:  Natural language question string.
-        top_k:  Number of top chunks to return. Default: 3.
-
-    Returns:
-        Dict matching retrieval_response.schema.json:
-        {
-            "query":      str,
-            "method":     "keyword",
-            "results":    list[dict],
-            "latency_ms": float
-        }
-
-    Raises:
-        ValueError:        If query is empty.
-        FileNotFoundError: If index files are not found (ingest not yet called).
+    Loads state on first call; reuses across subsequent calls.
     """
     if not query or not query.strip():
         raise ValueError('query cannot be empty.')

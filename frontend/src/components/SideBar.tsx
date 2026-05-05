@@ -19,7 +19,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, setMethod }) => {
   const methodMap: Record<string, string> = {
     Vectors: "vector",
     Keyword: "keyword",
-    CLARA:   "clara",
+    Hybrid:  "hybrid",
   };
 
   /* ── Handle retrieval mode change ── */
@@ -108,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, setMethod }) => {
           >
             <option>Keyword</option>
             <option>Vectors</option>
-            <option>CLARA</option>
+            <option>Hybrid</option>
           </select>
         </div>
 

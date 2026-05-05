@@ -2,52 +2,33 @@
 config
 ==========
 Central configuration for the Keyword Retrieval RAG pipeline.
-This file contains all the important settings and parameters for the system,
-such as API keys, model names, storage paths, and default values for chunking and retrieval.
 """
 
-# =============================================================================
-# GROQ API — used for query normalisation (Step 7) and answer generation (Step 10)
-# =============================================================================
-
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()  
-GROQ_API_KEY      = os.environ.get("GROQ_API_KEY", "your_groq_api_key_here")
+load_dotenv()
 
-# Model used to extract keywords from the user query (Step 7)
-QUERY_MODEL_NAME  = "llama-3.1-8b-instant"
+# ── Groq API ──────────────────────────────────────────────────────────────────
+GROQ_API_KEY     = os.environ.get("GROQ_API_KEY", "")
+QUERY_MODEL_NAME = "llama-3.1-8b-instant"
+GENERATOR_MODEL  = "llama-3.1-8b-instant"
+MAX_NEW_TOKENS   = 500
+TEMPERATURE      = 0.1
 
-# Model used to generate the final answer (Step 10)
-GENERATOR_MODEL   = "llama-3.1-8b-instant"
+# ── Storage ───────────────────────────────────────────────────────────────────
+# Cross-platform: defaults to keyword_retrieval/tests/
+# Override via KEYWORD_STORAGE_DIR env var
+_HERE        = Path(__file__).resolve().parent.parent   # keyword_retrieval/
+STORAGE_DIR  = os.environ.get(
+    "KEYWORD_STORAGE_DIR",
+    str(_HERE / "tests")
+)
 
-# Maximum tokens the generator can produce in one response
-MAX_NEW_TOKENS    = 500
+# ── Chunking defaults ─────────────────────────────────────────────────────────
+DEFAULT_CHUNK_SIZE    = 400
+DEFAULT_CHUNK_OVERLAP = 50
 
-# Generation temperature — 0.0 = deterministic, 1.0 = creative
-# Keep low (0.1) for factual RAG answers
-TEMPERATURE       = 0.1
-
-
-# =============================================================================
-# STORAGE
-# =============================================================================
-
-# Folder where loaded documents are stored 
-STORAGE_DIR       = r"C:\Users\DC\Desktop\keyword_RAG_01\tests"
-
-
-# =============================================================================
-# CHUNKING DEFAULTS
-# =============================================================================
-
-DEFAULT_CHUNK_SIZE    = 400   # words per chunk
-DEFAULT_CHUNK_OVERLAP = 50    # words shared between adjacent chunks
-
-
-# =============================================================================
-# RETRIEVAL DEFAULTS
-# =============================================================================
-
-DEFAULT_TOP_K     = 5         # number of chunks to retrieve
+# ── Retrieval defaults ────────────────────────────────────────────────────────
+DEFAULT_TOP_K = 5

@@ -13,3 +13,5 @@ python-dotenv
 scikit-learn
 tqdm
 requests
+pdf2image>=1.16.0
+pytesseract>=0.3.10

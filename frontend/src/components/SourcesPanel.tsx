@@ -1,21 +1,31 @@
 import React from "react";
-import { FileText, Clock, Zap } from "lucide-react";
+import { FileText, Clock, Zap, Database } from "lucide-react";
 
 interface Citation {
-  chunk_id:       string;
-  source_name:    string;   // backend field
-  source?:        string;   // Collins contract field (same value)
-  document_title?: string;  // Collins contract field
-  page:           number;
-  section:        string | null;
+  chunk_id:        string;
+  source_name:     string;
+  source?:         string;
+  document_title?: string;
+  page:            number;
+  section:         string | null;
 }
 
 interface SourcesPanelProps {
-  citations:  Citation[];
-  latency_ms: number;
+  citations:        Citation[];
+  latency_ms:       number;
+  retrieval_method?: string;
 }
 
-const SourcesPanel: React.FC<SourcesPanelProps> = ({ citations, latency_ms }) => {
+const METHOD_LABELS: Record<string, { label: string; color: string }> = {
+  vector:  { label: "Vector (FAISS)",       color: "badge-primary"  },
+  keyword: { label: "Keyword (BM25)",       color: "badge-secondary"},
+  hybrid:  { label: "Hybrid (FAISS+BM25)",  color: "badge-accent"   },
+  none:    { label: "No retrieval",         color: "badge-ghost"    },
+};
+
+const SourcesPanel: React.FC<SourcesPanelProps> = ({ citations, latency_ms, retrieval_method }) => {
+  const methodInfo = retrieval_method ? (METHOD_LABELS[retrieval_method] ?? { label: retrieval_method, color: "badge-ghost" }) : null;
+
   return (
     <div className="flex flex-col gap-4">
 
@@ -27,6 +37,13 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({ citations, latency_ms }) =>
             Sources
           </h3>
 
+          {methodInfo && (
+            <div className="flex items-center gap-2">
+              <Database className="size-3 text-base-content/40" />
+              <span className={`badge badge-sm ${methodInfo.color}`}>{methodInfo.label}</span>
+            </div>
+          )}
+
           {citations.length === 0 ? (
             <p className="text-base-content/40 text-sm italic">
               No sources yet — ask a question first
@@ -34,7 +51,6 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({ citations, latency_ms }) =>
           ) : (
             <div className="flex flex-col gap-2">
               {citations.map((c, i) => {
-                // support both "source_name" (backend) and "source" (Collins contract)
                 const displayName = c.document_title || c.source_name || c.source || "Unknown";
                 const fileName    = c.source_name || c.source || "Unknown";
                 return (
