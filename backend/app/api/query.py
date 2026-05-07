@@ -109,6 +109,54 @@ def list_sessions(
     }
 
 
+# PATCH /chat/sessions/{session_id} — rename a session
+@router.patch("/chat/sessions/{session_id}")
+def rename_session(
+    session_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    session = db.query(ChatSession).filter(
+        ChatSession.id      == session_id,
+        ChatSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    new_title = (payload.get("title") or "").strip()
+    if new_title:
+        session.title      = new_title
+        session.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(session)
+
+    return {"session_id": str(session.id), "title": session.title}
+
+
+# DELETE /chat/sessions/{session_id} — delete a session and its messages
+@router.delete("/chat/sessions/{session_id}", status_code=status.HTTP_200_OK)
+def delete_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    session = db.query(ChatSession).filter(
+        ChatSession.id      == session_id,
+        ChatSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete()
+    db.delete(session)
+    db.commit()
+
+    return {"deleted": session_id}
+
+
 # GET /chat/sessions/{session_id}
 @router.get("/chat/sessions/{session_id}")
 def get_session_messages(

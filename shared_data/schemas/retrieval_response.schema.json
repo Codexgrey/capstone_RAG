@@ -14,7 +14,7 @@
     "method": {
       "type": "string",
       "description": "The retrieval method that produced this response.",
-      "enum": ["vector", "keyword", "clara"],
+      "enum": ["vector", "keyword", "hybrid"],
       "example": "vector"
     },
     "results": {
@@ -55,7 +55,7 @@
           },
           "score": {
             "type": "number",
-            "description": "Relevance score. Range and meaning differ by method: vector = L2-derived similarity in (0, 1]; keyword = BM25 score (unbounded, higher is better); clara = method-specific confidence score. All are normalised so higher = more relevant.",
+            "description": "Relevance score. Range and meaning differ by method: vector = L2-derived similarity in (0, 1]; keyword = BM25 score (unbounded, higher is better); hybrid = RRF-fused score (FAISS+BM25). All are normalised so higher = more relevant.",
             "example": 0.91
           },
           "citation": {

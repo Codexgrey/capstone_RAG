@@ -66,7 +66,7 @@
     "retrieval_method": {
       "type": "string",
       "description": "The retrieval method used to produce this answer.",
-      "enum": ["vector", "keyword", "clara"],
+      "enum": ["vector", "keyword", "hybrid"],
       "example": "vector"
     },
     "latency_ms": {

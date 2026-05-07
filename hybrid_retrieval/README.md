@@ -1,99 +1,81 @@
-📚 Hybrid RAG Retrieval Project
+# Hybrid Retrieval — FAISS + BM25 + RRF
 
-This project implements a hybrid Retrieval-Augmented Generation (RAG) system that combines:
+Nathan's hybrid retrieval module. Combines vector and keyword retrieval
+using Reciprocal Rank Fusion (RRF) for a single unified ranking.
 
-🔎 Dense retrieval (FAISS embeddings)
-🔤 Sparse retrieval (BM25 keyword search)
-⚡ Hybrid fusion (Reciprocal Rank Fusion - RRF)
-📄 PDF text extraction + OCR for scanned documents
-✂️ Chunking for retrieval optimization
-🤖 LLM-based answer generation (Groq API)
+## Setup
 
-⚙️ Setup Instructions
-1. Clone the project
-git clone repository
-cd capstone_RAG/hybrid_retrieval
-
-2. Create virtual environment (recommended)
-python -m venv .venv
-.venv\Scripts\activate   # Windows
-3. Install dependencies
+```bash
+cd hybrid_retrieval
 pip install -r requirements.txt
-🧩 External Dependencies
-4. Install Poppler (PDF processing)
+```
 
-Required for PDF image rendering.
+Note: requires `tesseract-ocr` for OCR fallback on scanned PDFs:
+- Ubuntu: `sudo apt install tesseract-ocr`
+- macOS: `brew install tesseract`
+- Windows: https://github.com/UB-Mannheim/tesseract/wiki
 
-Download:
-https://github.com/oschwartz10612/poppler-windows/releases/
+## Run Standalone (Research / Testing)
 
-Then add to PATH:
+```bash
+cd hybrid_retrieval
+python src/main.py
+```
 
-C:\poppler\Library\bin
-5. Install Tesseract OCR
+Place test documents in `src/content/` — the script auto-discovers them.
 
-Required for scanned PDF text extraction.
+## Backend Integration
 
-Download:
-https://github.com/UB-Mannheim/tesseract/wiki
+The backend calls two functions from `src/retrieval/hybrid_adapter.py`:
 
-Then add to PATH:
+```python
+# Loaded by backend's module_loader dynamically
+ingest(file_paths=["path/to/doc.pdf"], chunk_size=150, chunk_overlap=30)
+result = retrieve(query="What is RAG?", top_k=5, rrf_k=60)
+```
 
-C:\Program Files\Tesseract-OCR
-How to Run the Project
-python -m src.main
-Pipeline Overview
+Persists to: `hybrid_faiss_index.bin` and `hybrid_chunk_records.npy`
+(in the `hybrid_retrieval/` directory when called from the backend).
 
-The system works in 4 main stages:
+## Pipeline
 
-1. Document Processing
-Load PDFs from /content
-Extract text using:
-native PDF text extraction
-OCR (for scanned pages via Tesseract)
-Normalize and clean text
-2. Chunking
-Documents are split into smaller chunks
-Each chunk is stored with metadata:
-document title
-chunk id
-position
-word count
-3. Indexing
+```
+Document → Loader (OCR fallback) → Chunker →
+  ┌─ FAISS embedding (all-MiniLM-L6-v2) ─┐
+  └─ BM25 tokenisation + scoring ─────────┘
+         ↓
+  Reciprocal Rank Fusion (RRF)
+         ↓
+  Merged top-k results
+```
 
-Two retrieval indexes are built:
+## RRF Formula
 
-- Sparse Index (BM25)
-Keyword-based search
-Good for exact terms and legal/policy queries
-- Dense Index (FAISS)
-Embedding-based semantic search
-Captures meaning, not just keywords
-4. Retrieval + Generation
+```
+score = 1/(k + rank_vector) + 1/(k + rank_bm25)
+```
+Default `k=60` (standard literature value). Each result shows whether it was
+found by vector only, keyword only, or both.
 
-The system supports 3 retrieval modes:
+## Structure
 
-- Vector Retrieval (FAISS)
+```
+src/
+├── models/         embedding_model.py    — SentenceTransformer wrapper
+├── preprocessing/  preprocess.py         — language detection, tokenisation
+├── indexing/       vector_store.py       — FAISS build/save/load
+│                   bm25_indexer.py       — BM25 + inverted index
+├── retrieval/      vector_retriever.py   — FAISS search
+│                   bm25_retriever.py     — BM25 search
+│                   hybrid_retriever.py   — RRF fusion
+│                   hybrid_adapter.py     — backend plug-in interface
+└── utils/          chunker.py, loader.py, prompts.py
+```
 
-Semantic similarity search using embeddings
+## Environment Variables (optional overrides)
 
-- Keyword Retrieval (BM25)
-
-Lexical search using token overlap
-
-- Hybrid Retrieval (RRF)
-
-Combines both rankings using Reciprocal Rank Fusion
-
-Final Step: Generation
-
-Retrieved chunks are passed to a Groq LLM, which:
-
-synthesizes an answer
-uses retrieved context
-adds citations from source chunks
-📊 Output Example
-Vector results (semantic)
-BM25 results (keyword-based)
-Hybrid results (fused ranking)
-Final generated answer with citations
+| Variable                   | Default                    |
+|----------------------------|----------------------------|
+| `HYBRID_VECTOR_INDEX_PATH` | `hybrid_faiss_index.bin`   |
+| `HYBRID_VECTOR_CHUNKS_PATH`| `hybrid_chunk_records.npy` |
+| `HYBRID_MODEL_NAME`        | `all-MiniLM-L6-v2`         |

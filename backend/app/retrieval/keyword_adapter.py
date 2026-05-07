@@ -1,54 +1,108 @@
 """
-app/retrieval/keyword_adapter.py  —  Olivier's BM25 keyword retrieval
+backend/app/retrieval/keyword_adapter.py
+=========================================
+Thin bridge between Khalid's backend and Olivier's keyword_retrieval module.
+
+All logic lives in:
+    keyword_retrieval/src/retrieval/keyword_adapter.py
+
+Uses importlib.util to load the module adapter directly by file path —
+no __init__.py files required anywhere in keyword_retrieval/.
+
+IMPORTANT: _KW_SRC is added to sys.path BEFORE exec_module and kept there
+through the entire mod.ingest() / mod.retrieve() call. Olivier's module uses
+lazy imports inside function bodies:
+    from preprocessing.preprocess import tokenize_chunk, detect_language
+These fire at call time, not at exec_module time, so sys.path must remain
+intact for the full duration of each public function call.
 """
-import os, re
-from app.retrieval.module_loader import load_adapter
 
-# RAG_PROJECT_ROOT must point to the repo root (where backend/, keyword_retrieval/ etc. live)
-# Set it in backend/.env — see .env.example
-_PROJECT = os.environ.get(
-    "RAG_PROJECT_ROOT",
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+import sys
+import os
+import re
+import importlib.util
+
+_KW_ROOT    = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../../keyword_retrieval")
 )
-_ROOT = os.path.join(_PROJECT, "keyword_retrieval")
-_ADAPTER = os.path.join(_ROOT, "src", "retrieval", "keyword_adapter.py")
+_KW_SRC     = os.path.join(_KW_ROOT, "src")
+_KW_ADAPTER = os.path.join(_KW_SRC, "retrieval", "keyword_adapter.py")
 
 
-def _get():
-    return load_adapter(_ADAPTER, _ROOT)
+def _load_keyword_module():
+    if not os.path.exists(_KW_ADAPTER):
+        raise FileNotFoundError(
+            f"keyword_adapter.py not found at: {_KW_ADAPTER}\n"
+            "Ensure keyword_retrieval/ is at the project root."
+        )
+    spec = importlib.util.spec_from_file_location(
+        "keyword_retrieval.src.retrieval.keyword_adapter",
+        _KW_ADAPTER,
+        submodule_search_locations=[],
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def ingest(file_paths, chunk_size=300, chunk_overlap=50):
-    original = os.getcwd()
+def ingest(chunks: list, document_id: str) -> dict:
+    original_dir = os.getcwd()
+    added = _KW_SRC not in sys.path
+    if added:
+        sys.path.insert(0, _KW_SRC)
     try:
-        os.chdir(_ROOT)
-        return _get().ingest(file_paths=file_paths, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        os.chdir(_KW_ROOT)
+        mod = _load_keyword_module()
+        return mod.ingest(chunks=chunks, document_id=document_id)
     except Exception as e:
-        return {"status": "error", "documents_ingested": 0, "total_chunks": 0, "latency_ms": 0.0, "error": str(e)}
+        return {
+            "status": "error", "documents_ingested": 0,
+            "total_chunks": 0, "latency_ms": 0.0, "error": str(e),
+        }
     finally:
-        os.chdir(original)
+        if added and _KW_SRC in sys.path:
+            sys.path.remove(_KW_SRC)
+        os.chdir(original_dir)
 
 
-def retrieve(query, top_k=5):
-    original = os.getcwd()
+def retrieve(query: str, top_k: int = 5) -> list:
+    original_dir = os.getcwd()
+    added = _KW_SRC not in sys.path
+    if added:
+        sys.path.insert(0, _KW_SRC)
     try:
-        os.chdir(_ROOT)
-        result = _get().retrieve(query=query, top_k=top_k)
-        return _normalise(result.get("results", []))
+        os.chdir(_KW_ROOT)
+        mod = _load_keyword_module()
+        result = mod.retrieve(query=query, top_k=top_k)
+
+        chunks = []
+        for r in result.get("results", []):
+            source = _clean(r.get("source") or r.get("source_name") or "Unknown")
+            chunks.append({
+                "chunk_id":       r.get("chunk_id",       ""),
+                "document_id":    r.get("document_id",    ""),
+                "document_title": r.get("document_title", ""),
+                "source_name":    source,
+                "source":         source,
+                "text":           r.get("text",           ""),
+                "score":          float(r.get("bm25_score") or r.get("score") or 0.0),
+                "bm25_score":     float(r.get("bm25_score") or r.get("score") or 0.0),
+                "rank":           r.get("rank", 0),
+                "citation":       r.get("citation", ""),
+                "metadata":       r.get("metadata", {}),
+            })
+        return chunks
+
     except FileNotFoundError:
         raise FileNotFoundError("No keyword index found — upload documents first")
     except Exception as e:
         raise RuntimeError(f"Olivier keyword retrieval failed: {e}")
     finally:
-        os.chdir(original)
+        if added and _KW_SRC in sys.path:
+            sys.path.remove(_KW_SRC)
+        os.chdir(original_dir)
 
 
-def _normalise(results):
-    out = []
-    for i, r in enumerate(results):
-        src = re.sub(r'^[0-9a-f]{8}_', '', (r.get("source") or r.get("source_name") or "Unknown")
-                     .replace("_ocr.txt", ".pdf").replace("_ocr", ""))
-        out.append({**r, "source_name": src, "source": src,
-                    "score": float(r.get("bm25_score") or r.get("score") or 0.0),
-                    "rank": r.get("rank") or (i + 1)})
-    return out
+def _clean(s: str) -> str:
+    return re.sub(r'^[0-9a-f]{8}_', '', s
+                  .replace("_ocr.txt", ".pdf").replace("_ocr", ""))

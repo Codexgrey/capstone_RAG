@@ -1,53 +1,111 @@
 """
-app/retrieval/hybrid_adapter.py  —  Nathan's FAISS+BM25+RRF hybrid retrieval
+backend/app/retrieval/hybrid_adapter.py
+========================================
+Thin bridge between Khalid's backend and Nathan's hybrid_retrieval module.
+
+All logic lives in:
+    hybrid_retrieval/src/retrieval/hybrid_adapter.py
+
+Uses importlib.util to load the module adapter directly by file path —
+no __init__.py files required anywhere in hybrid_retrieval/.
+
+IMPORTANT: _HY_SRC is added to sys.path BEFORE exec_module and kept there
+through the entire mod.ingest() / mod.retrieve() call. Nathan's module uses
+lazy imports inside function bodies:
+    from retrieval.vector_retriever import ...
+    from preprocessing.preprocess import ...
+    from models.embedding_model import ...
+These fire at call time, not at exec_module time, so sys.path must remain
+intact for the full duration of each public function call.
 """
-import os, re
-from app.retrieval.module_loader import load_adapter
 
-_PROJECT = os.environ.get(
-    "RAG_PROJECT_ROOT",
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+import sys
+import os
+import re
+import importlib.util
+
+_HY_ROOT    = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../../hybrid_retrieval")
 )
-_ROOT = os.path.join(_PROJECT, "hybrid_retrieval")
-_ADAPTER = os.path.join(_ROOT, "src", "retrieval", "hybrid_adapter.py")
+_HY_SRC     = os.path.join(_HY_ROOT, "src")
+_HY_ADAPTER = os.path.join(_HY_SRC, "retrieval", "hybrid_adapter.py")
 
 
-def _get():
-    return load_adapter(_ADAPTER, _ROOT)
+def _load_hybrid_module():
+    if not os.path.exists(_HY_ADAPTER):
+        raise FileNotFoundError(
+            f"hybrid_adapter.py not found at: {_HY_ADAPTER}\n"
+            "Ensure hybrid_retrieval/ is at the project root."
+        )
+    spec = importlib.util.spec_from_file_location(
+        "hybrid_retrieval.src.retrieval.hybrid_adapter",
+        _HY_ADAPTER,
+        submodule_search_locations=[],
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def ingest(file_paths, chunk_size=150, chunk_overlap=30):
-    original = os.getcwd()
+def ingest(chunks: list, document_id: str) -> dict:
+    original_dir = os.getcwd()
+    added = _HY_SRC not in sys.path
+    if added:
+        sys.path.insert(0, _HY_SRC)
     try:
-        os.chdir(_ROOT)
-        return _get().ingest(file_paths=file_paths, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        os.chdir(_HY_ROOT)
+        mod = _load_hybrid_module()
+        return mod.ingest(chunks=chunks, document_id=document_id)
     except Exception as e:
-        return {"status": "error", "documents_ingested": 0, "total_chunks": 0, "latency_ms": 0.0, "error": str(e)}
+        return {
+            "status": "error", "documents_ingested": 0,
+            "total_chunks": 0, "latency_ms": 0.0, "error": str(e),
+        }
     finally:
-        os.chdir(original)
+        if added and _HY_SRC in sys.path:
+            sys.path.remove(_HY_SRC)
+        os.chdir(original_dir)
 
 
-def retrieve(query, top_k=5, rrf_k=60):
-    original = os.getcwd()
+def retrieve(query: str, top_k: int = 5) -> list:
+    original_dir = os.getcwd()
+    added = _HY_SRC not in sys.path
+    if added:
+        sys.path.insert(0, _HY_SRC)
     try:
-        os.chdir(_ROOT)
-        result = _get().retrieve(query=query, top_k=top_k, rrf_k=rrf_k)
-        return _normalise(result.get("results", []))
+        os.chdir(_HY_ROOT)
+        mod = _load_hybrid_module()
+        result = mod.retrieve(query=query, top_k=top_k)
+
+        chunks = []
+        for r in result.get("results", []):
+            source = _clean(r.get("source") or r.get("source_name") or "Unknown")
+            chunks.append({
+                "chunk_id":         r.get("chunk_id",       ""),
+                "document_id":      r.get("document_id",    ""),
+                "document_title":   r.get("document_title", ""),
+                "source_name":      source,
+                "source":           source,
+                "text":             r.get("text",           ""),
+                "score":            float(r.get("rrf_score") or r.get("score") or 0.0),
+                "rrf_score":        float(r.get("rrf_score") or r.get("score") or 0.0),
+                "rank":             r.get("rank", 0),
+                "citation":         r.get("citation", ""),
+                "metadata":         r.get("metadata", {}),
+                "retrieval_source": r.get("retrieval", ""),
+            })
+        return chunks
+
     except FileNotFoundError:
         raise FileNotFoundError("No hybrid index found — upload documents first")
     except Exception as e:
         raise RuntimeError(f"Nathan hybrid retrieval failed: {e}")
     finally:
-        os.chdir(original)
+        if added and _HY_SRC in sys.path:
+            sys.path.remove(_HY_SRC)
+        os.chdir(original_dir)
 
 
-def _normalise(results):
-    out = []
-    for i, r in enumerate(results):
-        src = re.sub(r'^[0-9a-f]{8}_', '', (r.get("source") or r.get("source_name") or "Unknown")
-                     .replace("_ocr.txt", ".pdf").replace("_ocr", ""))
-        out.append({**r, "source_name": src, "source": src,
-                    "score": float(r.get("rrf_score") or r.get("score") or 0.0),
-                    "rank": r.get("rank") or (i + 1),
-                    "retrieval_source": r.get("retrieval", "")})
-    return out
+def _clean(s: str) -> str:
+    return re.sub(r'^[0-9a-f]{8}_', '', s
+                  .replace("_ocr.txt", ".pdf").replace("_ocr", ""))

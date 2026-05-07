@@ -1,12 +1,20 @@
 import React, { useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Cpu } from "lucide-react";
 
 interface ChatBoxProps {
-  onSend: (query: string) => void;
+  onSend:   (query: string) => void;
   loading?: boolean;
+  method:   string;
+  setMethod: (m: string) => void;
 }
 
-const ChatBox: React.FC<ChatBoxProps> = ({ onSend, loading = false }) => {
+const METHODS = [
+  { value: "vector",  label: "Vector",  desc: "Semantic similarity (FAISS)" },
+  { value: "keyword", label: "Keyword", desc: "BM25 keyword search" },
+  { value: "hybrid", label: "Hybrid",  desc: "FAISS + BM25 + RRF fusion" },
+];
+
+const ChatBox: React.FC<ChatBoxProps> = ({ onSend, loading = false, method, setMethod }) => {
   const [query, setQuery] = useState("");
 
   const handleSend = () => {
@@ -19,6 +27,28 @@ const ChatBox: React.FC<ChatBoxProps> = ({ onSend, loading = false }) => {
     <div className="card bg-base-100 border-t-4 border-[#00FF9D] hover:shadow-lg transition-all duration-200">
       <div className="card-body gap-4">
         <h2 className="card-title text-base-content text-lg">Ask a Question</h2>
+
+        {/* Retrieval method selector */}
+        <div className="flex flex-wrap gap-2">
+          {METHODS.map((m) => (
+            <button
+              key={m.value}
+              className={`btn btn-sm gap-1 transition-all ${
+                method === m.value
+                  ? "btn-primary"
+                  : "btn-ghost border border-base-content/20"
+              }`}
+              onClick={() => setMethod(m.value)}
+              title={m.desc}
+            >
+              <Cpu className="size-3" />
+              {m.label}
+            </button>
+          ))}
+          <span className="text-xs text-base-content/40 self-center ml-1">
+            {METHODS.find((m) => m.value === method)?.desc}
+          </span>
+        </div>
 
         <textarea
           className="textarea textarea-bordered w-full h-24 resize-none text-base leading-relaxed"

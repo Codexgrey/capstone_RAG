@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 
 def chunk_text_with_metadata(
     text: str,
-    chunk_size: int = 300,
+    chunk_size: int = 400,
     overlap: int = 50,
     document_title: str = 'Untitled',
     source: str = 'unknown',
