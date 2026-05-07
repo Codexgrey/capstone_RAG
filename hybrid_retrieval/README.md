@@ -19,7 +19,7 @@ Note: requires `tesseract-ocr` for OCR fallback on scanned PDFs:
 
 ```bash
 cd hybrid_retrieval
-python src/main.py
+python -m src.main
 ```
 
 Place test documents in `src/content/` — the script auto-discovers them.
