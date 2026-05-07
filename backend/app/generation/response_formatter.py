@@ -1,6 +1,6 @@
 """
 generation/response_formatter.py
-Formats the LLM answer into the team's shared answer_response contract.
+Formats the LLM answer into the team's shared answer_response schema.
 
 Matches answer_response.schema.json exactly:
 {
@@ -23,16 +23,16 @@ def format_response(
     retrieval_method: str = "none",
     latency_ms: float = 0.0,
     session_id: str = None,
-    question: str = "",          # ← Collins contract requires this
+    question: str = "",         
 ) -> Dict[str, Any]:
 
     citations    = _build_citations(chunks)
     evidence     = _build_evidence(chunks)
 
     response = {
-        "query":            question,          # ← contract field
+        "query":            question,         
         "answer":           answer,
-        "evidence_used":    evidence,          # ← contract field
+        "evidence_used":    evidence,          
         "citations":        citations,
         "retrieval_method": retrieval_method,
         "latency_ms":       round(latency_ms, 2),
@@ -46,7 +46,7 @@ def format_response(
 
 def _build_citations(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Build citations matching Collins's answer_response contract:
+    Build citations matching project's answer_response schema:
     { chunk_id, document_title, source, file_type }
 
     Also keeps source_name and page so SourcesPanel.tsx works without changes.
@@ -66,7 +66,7 @@ def _build_citations(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         seen.add(key)
 
-        # Generate document_title from filename (Collins contract)
+        # Generate document_title from filename (shared contract)
         doc_title = _clean_source_name(source_name)\
             .replace(".pdf",  "")\
             .replace(".txt",  "")\
@@ -76,7 +76,7 @@ def _build_citations(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             .title()
 
         citations.append({
-            # Collins contract fields
+            # Shared contract fields
             "chunk_id":       chunk_id,
             "document_title": doc_title,
             "source":         source_name,
@@ -92,7 +92,7 @@ def _build_citations(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def _build_evidence(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Build evidence_used array per Collins's contract.
+    Build evidence_used array per project shared contract.
     Shows which chunks contributed to the answer and a preview.
     """
     return [
