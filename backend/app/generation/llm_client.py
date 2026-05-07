@@ -52,7 +52,7 @@ def generate_answer(
 
 # ── Backends ──────────────────────────────────────────────────────────────────
 
-def _call_groq(messages: List[Dict[str, str]], temperature: float = 0.1) -> str:
+def _call_groq(messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
     """Groq API — llama-3.1-8b-instant. Fast, free tier available."""
     try:
         from groq import Groq
@@ -63,7 +63,7 @@ def _call_groq(messages: List[Dict[str, str]], temperature: float = 0.1) -> str:
         resp    = client.chat.completions.create(
             model       = "llama-3.1-8b-instant",
             messages    = messages,
-            max_tokens  = 1024,
+            max_tokens  = 1200,
             temperature = temperature,
         )
         return resp.choices[0].message.content
