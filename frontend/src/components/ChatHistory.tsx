@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { MessageSquare, ChevronRight, Clock, Trash2 } from "lucide-react";
-import { getSessions, getSessionMessages } from "../services/queryService";
+import React, { useEffect, useState, useRef } from "react";
+import { MessageSquare, ChevronRight, Clock, Trash2, MoreVertical, Pencil, Check, X } from "lucide-react";
+import { getSessions, getSessionMessages, renameSession, deleteSession } from "../services/queryService";
+
 
 interface ChatSession {
   session_id: string;
@@ -33,11 +34,69 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   const [sessions, setSessions]   = useState<ChatSession[]>([]);
   const [loading, setLoading]     = useState(false);
   const [expanded, setExpanded]   = useState(true);
+  const [menuOpenId, setMenuOpenId]     = useState<string | null>(null);
+  const [menuPos, setMenuPos]           = useState<{ top: number; right: number } | null>(null);
+  const [renamingId, setRenamingId]     = useState<string | null>(null);
+  const [renameValue, setRenameValue]   = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
 
   /* ── Load sessions whenever a new message is sent ── */
   useEffect(() => {
     fetchSessions();
   }, [refreshTrigger]);
+
+  /* ── Close kebab menu on outside click ── */
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
+        setMenuPos(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleKebabClick = (e: React.MouseEvent<HTMLButtonElement>, sessionId: string) => {
+    e.stopPropagation();
+    if (menuOpenId === sessionId) {
+      setMenuOpenId(null);
+      setMenuPos(null);
+      return;
+    }
+    // Calculate fixed position from button's bounding rect
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({
+      top:   rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+    setMenuOpenId(sessionId);
+  };
+
+  const handleRenameCommit = async (sessionId: string) => {
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      try {
+        await renameSession(sessionId, trimmed);
+        setSessions((prev) =>
+          prev.map((s) => s.session_id === sessionId ? { ...s, title: trimmed } : s)
+        );
+      } catch { /* silent — title stays as-is */ }
+    }
+    setRenamingId(null);
+    setMenuOpenId(null);
+    setMenuPos(null);
+  };
+
+  const handleDelete = async (sessionId: string) => {
+    try {
+      await deleteSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+      if (sessionId === currentSessionId) onNewChat();
+    } catch { /* silent */ }
+    setMenuOpenId(null);
+    setMenuPos(null);
+  };
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -104,40 +163,107 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
                 No past conversations yet
               </p>
             ) : (
-              sessions.map((s) => {
-                const isActive = s.session_id === currentSessionId;
+              <div className="flex flex-col gap-1">
+              {sessions.map((s) => {
+                const isActive   = s.session_id === currentSessionId;
+                const menuOpen   = menuOpenId === s.session_id;
+                const isRenaming = renamingId === s.session_id;
+
                 return (
-                  <button
+                  <div
                     key={s.session_id}
-                    onClick={() => handleLoadSession(s.session_id)}
                     className={`
-                      flex items-start gap-2 w-full text-left rounded-lg px-3 py-2
+                      group relative flex items-center gap-2 w-full rounded-lg px-3 py-2
                       transition-all duration-150 hover:bg-base-200
                       ${isActive ? "bg-base-200 border border-primary/30" : ""}
                     `}
                   >
-                    <MessageSquare className={`size-3 mt-1 shrink-0 ${isActive ? "text-primary" : "text-base-content/40"}`} />
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className={`text-xs truncate ${isActive ? "text-primary font-medium" : "text-base-content/70"}`}>
-                        {s.title || "Chat"}
-                      </span>
-                      <span className="text-xs text-base-content/40 flex items-center gap-1">
-                        <Clock className="size-2" />
-                        {formatTime(s.updated_at)}
-                      </span>
-                    </div>
-                    {isActive && (
-                      <span className="badge badge-primary badge-xs ml-auto mt-1 shrink-0">
-                        active
-                      </span>
+                    <MessageSquare className={`size-3 shrink-0 ${isActive ? "text-primary" : "text-base-content/40"}`} />
+
+                    {/* Title or rename input */}
+                    {isRenaming ? (
+                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                        <input
+                          autoFocus
+                          className="input input-xs input-bordered flex-1 min-w-0"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter")  handleRenameCommit(s.session_id);
+                            if (e.key === "Escape") { setRenamingId(null); setMenuOpenId(null); setMenuPos(null); }
+                          }}
+                        />
+                        <button className="btn btn-ghost btn-xs px-1" onClick={() => handleRenameCommit(s.session_id)}>
+                          <Check className="size-3 text-success" />
+                        </button>
+                        <button className="btn btn-ghost btn-xs px-1" onClick={() => { setRenamingId(null); setMenuOpenId(null); setMenuPos(null); }}>
+                          <X className="size-3 text-error" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="flex flex-col gap-0.5 min-w-0 flex-1 text-left"
+                        onClick={() => handleLoadSession(s.session_id)}
+                      >
+                        <span className={`text-xs truncate ${isActive ? "text-primary font-medium" : "text-base-content/70"}`}>
+                          {s.title || "Chat"}
+                        </span>
+                        <span className="text-xs text-base-content/40 flex items-center gap-1">
+                          <Clock className="size-2" />
+                          {formatTime(s.updated_at)}
+                        </span>
+                      </button>
                     )}
-                  </button>
+
+                    {isActive && !isRenaming && (
+                      <span className="badge badge-primary badge-xs shrink-0">active</span>
+                    )}
+
+                    {/* Kebab menu button */}
+                    {!isRenaming && (
+                      <button
+                        className="btn btn-ghost btn-xs px-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        onClick={(e) => handleKebabClick(e, s.session_id)}
+                        title="Options"
+                      >
+                        <MoreVertical className="size-3" />
+                      </button>
+                    )}
+                  </div>
                 );
-              })
+              })}
+              </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Fixed-position dropdown — renders outside scrollable container */}
+      {menuOpenId && menuPos && (
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: menuPos.top, right: menuPos.right, zIndex: 9999 }}
+          className="w-32 bg-base-100 border border-base-content/10 rounded-lg shadow-xl py-1"
+        >
+          <button
+            className="w-full text-left px-3 py-2 text-xs text-base-content hover:bg-base-200 flex items-center gap-2"
+            onClick={() => {
+              const s = sessions.find(s => s.session_id === menuOpenId);
+              if (s) { setRenamingId(s.session_id); setRenameValue(s.title || ""); }
+              setMenuOpenId(null);
+              setMenuPos(null);
+            }}
+          >
+            <Pencil className="size-3" /> Rename
+          </button>
+          <button
+            className="w-full text-left px-3 py-2 text-xs text-error hover:bg-base-200 flex items-center gap-2"
+            onClick={() => handleDelete(menuOpenId)}
+          >
+            <Trash2 className="size-3" /> Delete
+          </button>
+        </div>
+      )}
     </div>
   );
 };

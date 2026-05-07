@@ -19,21 +19,28 @@ from app.config.settings import settings
 def generate_answer(
     prompt: str,
     messages: List[Dict[str, str]] = None,
+    temperature: float = 0.1,
 ) -> str:
     """
     Generate an answer from the configured LLM backend.
     Uses chat-message format when available, plain prompt as fallback.
+
+    Args:
+        prompt:      Plain-text fallback prompt (used if messages is None).
+        messages:    Chat-format message list (preferred).
+        temperature: Sampling temperature. Default 0.1 for deterministic RAG
+                     responses. Passed through to whichever backend is active.
     """
     backend = settings.LLM_BACKEND
 
     if backend == "groq":
-        return _call_groq(messages or _to_messages(prompt))
+        return _call_groq(messages or _to_messages(prompt), temperature)
 
     elif backend == "openai":
-        return _call_openai(messages or _to_messages(prompt))
+        return _call_openai(messages or _to_messages(prompt), temperature)
 
     elif backend == "anthropic":
-        return _call_anthropic(messages or _to_messages(prompt))
+        return _call_anthropic(messages or _to_messages(prompt), temperature)
 
     elif backend == "placeholder":
         return _placeholder(prompt)
@@ -45,7 +52,7 @@ def generate_answer(
 
 # ── Backends ──────────────────────────────────────────────────────────────────
 
-def _call_groq(messages: List[Dict[str, str]]) -> str:
+def _call_groq(messages: List[Dict[str, str]], temperature: float = 0.1) -> str:
     """Groq API — llama-3.1-8b-instant. Fast, free tier available."""
     try:
         from groq import Groq
@@ -57,7 +64,7 @@ def _call_groq(messages: List[Dict[str, str]]) -> str:
             model       = "llama-3.1-8b-instant",
             messages    = messages,
             max_tokens  = 1024,
-            temperature = 0.1,
+            temperature = temperature,
         )
         return resp.choices[0].message.content
 
@@ -67,7 +74,7 @@ def _call_groq(messages: List[Dict[str, str]]) -> str:
         return f"Groq API error: {str(e)}"
 
 
-def _call_openai(messages: List[Dict[str, str]]) -> str:
+def _call_openai(messages: List[Dict[str, str]], temperature: float = 0.1) -> str:
     """
     OpenAI API — gpt-4o-mini.
     Setup: OPENAI_API_KEY in .env, LLM_BACKEND=openai, pip install openai
@@ -81,7 +88,7 @@ def _call_openai(messages: List[Dict[str, str]]) -> str:
             model       = "gpt-4o-mini",
             messages    = messages,
             max_tokens  = 1024,
-            temperature = 0.1,
+            temperature = temperature,
         )
         return resp.choices[0].message.content
 
@@ -91,7 +98,7 @@ def _call_openai(messages: List[Dict[str, str]]) -> str:
         return f"OpenAI API error: {str(e)}"
 
 
-def _call_anthropic(messages: List[Dict[str, str]]) -> str:
+def _call_anthropic(messages: List[Dict[str, str]], temperature: float = 0.1) -> str:
     """
     Anthropic Claude API — claude-sonnet-4-20250514.
     Setup: ANTHROPIC_API_KEY in .env, LLM_BACKEND=anthropic, pip install anthropic
@@ -110,6 +117,7 @@ def _call_anthropic(messages: List[Dict[str, str]]) -> str:
             max_tokens = 1024,
             system     = system_msg,
             messages   = conversation,
+            temperature = temperature,
         )
         return resp.content[0].text
 

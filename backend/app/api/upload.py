@@ -1,8 +1,21 @@
+"""
+api/upload.py — Document upload, ingestion, and management endpoints.
+
+Upload flow:
+  1. Save file to disk
+  2. Record in PostgreSQL (status=processing)
+  3. Return 202 immediately
+  4. Background task: extract → chunk → index in ChromaDB → index in FAISS/BM25
+     ChromaDB is always indexed first (it is the guaranteed fallback for queries).
+     FAISS and BM25 secondary indexing runs afterwards; failures are logged but
+     do not block the document from being queryable via ChromaDB.
+"""
+
 import os
-from email.mime import text
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.config.database import get_db
@@ -23,51 +36,58 @@ async def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 1: Generate shared document_id ─
+    # ── duplicate check ───────────────────────────────────────────────────────
+    existing = db.query(Document).filter(
+        Document.uploaded_by == current_user.id,
+        Document.filename    == file.filename,
+    ).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f'"{file.filename}" is already in the system.',
+        )
+    # ─────────────────────────────────────────────────────────────────────────
+
     document_id = f"doc_{uuid.uuid4().hex[:12]}"
 
-    # 2: Save file to disk ─
     try:
         file_info = await save_upload_file(file, user_id=str(current_user.id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # 3: Save metadata to PostgreSQL (status=processing) ─
     doc = Document(
         document_id = document_id,
-        filename = file_info["filename"],
-        filepath = file_info["filepath"],
-        file_type = file_info["file_type"],
+        filename    = file_info["filename"],
+        filepath    = file_info["filepath"],
+        file_type   = file_info["file_type"],
         uploaded_by = current_user.id,
         upload_date = datetime.utcnow(),
-        status = "processing"
+        status      = "processing"
     )
     db.add(doc)
     db.add(Log(
-        user_id = current_user.id,
-        action = "document_upload_started",
-        detail = f"file={file_info['filename']} doc_id={document_id}",
+        user_id   = current_user.id,
+        action    = "document_upload_started",
+        detail    = f"file={file_info['filename']} doc_id={document_id}",
         timestamp = datetime.utcnow()
     ))
     db.commit()
 
-    # 4: Queue background processing ─
     background_tasks.add_task(
         process_document_background,
         document_id = document_id,
-        filepath = file_info["filepath"],
-        file_type = file_info["file_type"],
-        filename = file_info["filename"],
-        user_id = current_user.id,
-        username = current_user.username
+        filepath    = file_info["filepath"],
+        file_type   = file_info["file_type"],
+        filename    = file_info["filename"],
+        user_id     = current_user.id,
+        username    = current_user.username
     )
 
-    #  Return immediately — don't wait for processing 
     return {
-        "message" : "Document uploaded. Processing in background.",
-        "document_id" : document_id,
-        "filename" : file_info["filename"],
-        "status" : "processing"
+        "message":     "Document uploaded. Processing in background.",
+        "document_id": document_id,
+        "filename":    file_info["filename"],
+        "status":      "processing"
     }
 
 
@@ -83,66 +103,50 @@ async def process_document_background(
     db = SessionLocal()
 
     try:
-        #  Extract text 
+        # ── Step 1: Extract text ──────────────────────────────────────────
         text = extract_text(filepath, file_type)
         print(f"  ✅ Text extracted from {filename}")
 
-        #  Chunk the text 
-        chunks = chunk_text(
-            text = text,
-            document_id = document_id,
-            source_name = filename
-        )
+        # ── Step 2: Chunk ─────────────────────────────────────────────────
+        chunks = chunk_text(text=text, document_id=document_id, source_name=filename)
         print(f"  ✅ {len(chunks)} chunks created")
 
-        # Index chunks in ChromaDB 
-        index_chunks(                                  
-            chunks      = chunks,
-            document_id = document_id,
-            uploaded_by = username,
-            file_type   = file_type
-        )
+        # ── Step 3: Index in ChromaDB (primary — always runs) ─────────────
+        index_chunks(chunks=chunks, document_id=document_id,
+                     uploaded_by=username, file_type=file_type)
         print(f"  ✅ Chunks indexed in ChromaDB")
 
-        #  Save chunk metadata to PostgreSQL 
+        # ── Step 4: Save chunk metadata to PostgreSQL ─────────────────────
         for chunk in chunks:
             db.add(DocumentChunk(
-                chunk_id = chunk["chunk_id"],
+                chunk_id    = chunk["chunk_id"],
                 document_id = document_id,
                 source_name = filename,
-                text = chunk["text"],
-                page = chunk.get("page", 1),
-                start_char = chunk.get("start_char", 0),
-                end_char = chunk.get("end_char", 0),
+                text        = chunk["text"],
+                page        = chunk.get("page", 1),
+                start_char  = chunk.get("start_char", 0),
+                end_char    = chunk.get("end_char", 0),
             ))
 
-        #  Mark document as completed 
-        doc = db.query(Document).filter(
-            Document.document_id == document_id
-        ).first()
+        doc = db.query(Document).filter(Document.document_id == document_id).first()
         if doc:
             doc.status = "completed"
 
         db.add(Log(
-            user_id = user_id,
-            action = "document_uploaded",
-            detail = f"file={filename} chunks={len(chunks)} doc_id={document_id}",
+            user_id   = user_id,
+            action    = "document_uploaded",
+            detail    = f"file={filename} chunks={len(chunks)} doc_id={document_id}",
             timestamp = datetime.utcnow()
         ))
         db.commit()
         print(f"  ✅ Document {document_id} processing complete")
 
-        # ── Ingest into all three retrieval indexes (parallel) ────────────────
-        #
-        # All three ingest() calls run concurrently in a thread pool so that
-        # the total upload time ≈ slowest module, not the sum of all three.
-        #
-        import asyncio
-        from concurrent.futures import ThreadPoolExecutor
-
+        # ── Step 5: Index in secondary stores (non-blocking, sequential) ──
+        # These run AFTER ChromaDB is confirmed ready so the doc is always
+        # queryable. Failures are warnings only — ChromaDB fallback covers them.
         abs_filepath = os.path.abspath(filepath)
 
-        # Vector module reads .txt natively; pass extracted text for PDFs.
+        # Vector module prefers .txt; write OCR txt for PDFs
         if text and file_type == "pdf":
             txt_path = abs_filepath.replace(".pdf", "_ocr.txt")
             try:
@@ -155,68 +159,63 @@ async def process_document_background(
         else:
             vector_file_path = abs_filepath
 
-        def _run_vector():
-            try:
-                from app.retrieval.vector_adapter import ingest as _ingest
-                r = _ingest(file_paths=[vector_file_path])
-                if r.get("status") == "ok":
-                    print(f"  ✅ Vector (FAISS): {r.get('total_chunks')} total chunks")
-                else:
-                    print(f"  ⚠️  Vector ingest: {r.get('error')}")
-            except Exception as e:
-                print(f"  ⚠️  Vector ingest failed: {e}")
+        _run_vector_ingest(vector_file_path)
+        _run_keyword_ingest(chunks, document_id)
+        _run_hybrid_ingest(chunks, document_id)
 
-        def _run_keyword():
-            try:
-                from app.retrieval.keyword_adapter import ingest as _ingest
-                r = _ingest(file_paths=[abs_filepath])
-                if r.get("status") == "ok":
-                    print(f"  ✅ Keyword (BM25): {r.get('total_chunks')} total chunks")
-                else:
-                    print(f"  ⚠️  Keyword ingest: {r.get('error')}")
-            except Exception as e:
-                print(f"  ⚠️  Keyword ingest failed: {e}")
-
-        def _run_hybrid():
-            try:
-                from app.retrieval.hybrid_adapter import ingest as _ingest
-                r = _ingest(file_paths=[abs_filepath])
-                if r.get("status") == "ok":
-                    print(f"  ✅ Hybrid (FAISS+BM25): {r.get('total_chunks')} total chunks")
-                else:
-                    print(f"  ⚠️  Hybrid ingest: {r.get('error')}")
-            except Exception as e:
-                print(f"  ⚠️  Hybrid ingest failed: {e}")
-
-        # Run all three in parallel using a thread pool
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            futures = [
-                pool.submit(_run_vector),
-                pool.submit(_run_keyword),
-                pool.submit(_run_hybrid),
-            ]
-            for fut in futures:
-                fut.result()   # wait for all and surface exceptions
     except Exception as e:
         print(f"  ❌ Failed: {e}")
         try:
-            doc = db.query(Document).filter(
-                Document.document_id == document_id
-            ).first()
+            doc = db.query(Document).filter(Document.document_id == document_id).first()
             if doc:
                 doc.status = "failed"
             db.add(Log(
-                user_id = user_id,
-                action = "document_upload_failed",
-                detail = f"file={filename} error={str(e)}",
+                user_id   = user_id,
+                action    = "document_upload_failed",
+                detail    = f"file={filename} error={str(e)}",
                 timestamp = datetime.utcnow()
             ))
             db.commit()
-        except:
+        except Exception:
             pass
-
     finally:
         db.close()
+
+
+def _run_vector_ingest(file_path: str):
+    try:
+        from app.retrieval.vector_adapter import ingest as _ingest
+        r = _ingest(file_paths=[file_path])
+        if r.get("status") == "ok":
+            print(f"  ✅ Vector (FAISS): {r.get('total_chunks')} total chunks")
+        else:
+            print(f"  ⚠️  Vector ingest: {r.get('error')}")
+    except Exception as e:
+        print(f"  ⚠️  Vector ingest: {e}")
+
+
+def _run_keyword_ingest(chunks: list, document_id: str):
+    try:
+        from app.retrieval.keyword_adapter import ingest as _ingest
+        r = _ingest(chunks=chunks, document_id=document_id)
+        if r.get("status") == "ok":
+            print(f"  ✅ Keyword (BM25): {r.get('total_chunks')} total chunks")
+        else:
+            print(f"  ⚠️  Keyword ingest: {r.get('error')}")
+    except Exception as e:
+        print(f"  ⚠️  Keyword ingest: {e}")
+
+
+def _run_hybrid_ingest(chunks: list, document_id: str):
+    try:
+        from app.retrieval.hybrid_adapter import ingest as _ingest
+        r = _ingest(chunks=chunks, document_id=document_id)
+        if r.get("status") == "ok":
+            print(f"  ✅ Hybrid (FAISS+BM25+RRF): {r.get('total_chunks')} chunks ready")
+        else:
+            print(f"  ⚠️  Hybrid ingest: {r.get('error')}")
+    except Exception as e:
+        print(f"  ⚠️  Hybrid ingest: {e}")
 
 
 @router.get("/documents", status_code=status.HTTP_200_OK)
@@ -225,19 +224,20 @@ def list_documents(
     current_user: User = Depends(get_current_user)
 ):
     """List all documents uploaded by the current user."""
-    docs = db.query(Document)\
-             .filter(Document.uploaded_by == current_user.id)\
-             .order_by(Document.upload_date.desc())\
-             .all()
-
+    docs = (
+        db.query(Document)
+        .filter(Document.uploaded_by == current_user.id)
+        .order_by(Document.upload_date.desc())
+        .all()
+    )
     return {
         "documents": [
             {
-                "document_id" : d.document_id,
-                "filename" : d.filename,
-                "file_type" : d.file_type,
-                "status" : d.status,
-                "upload_date" : d.upload_date,
+                "document_id": d.document_id,
+                "filename":    d.filename,
+                "file_type":   d.file_type,
+                "status":      d.status,
+                "upload_date": d.upload_date,
             }
             for d in docs
         ],
@@ -261,11 +261,12 @@ def get_document_status(
         raise HTTPException(status_code=404, detail="Document not found")
 
     return {
-        "document_id" : doc.document_id,
-        "filename" : doc.filename,
-        "status" : doc.status,
-        "upload_date" : doc.upload_date
+        "document_id": doc.document_id,
+        "filename":    doc.filename,
+        "status":      doc.status,
+        "upload_date": doc.upload_date
     }
+
 
 @router.delete("/document/{document_id}", status_code=status.HTTP_200_OK)
 def delete_document(
@@ -273,7 +274,7 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a document and its chunks. Admin only."""
+    """Delete a document and its chunks."""
     doc = db.query(Document).filter(
         Document.document_id == document_id,
         Document.uploaded_by == current_user.id
@@ -282,19 +283,24 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Delete file from disk
     try:
         delete_file(doc.filepath)
     except Exception as e:
         print(f"  ⚠️  Could not delete file: {e}")
 
-    # Delete from DB (chunks cascade via FK)
+    # Also remove from ChromaDB
+    try:
+        from app.ingestion.indexer import delete_document_chunks
+        delete_document_chunks(document_id)
+    except Exception as e:
+        print(f"  ⚠️  Could not delete ChromaDB chunks: {e}")
+
     db.delete(doc)
     db.add(Log(
         user_id   = current_user.id,
         action    = "document_deleted",
         detail    = f"doc_id={document_id} file={doc.filename}",
-        timestamp = __import__('datetime').datetime.utcnow()
+        timestamp = datetime.utcnow()
     ))
     db.commit()
 

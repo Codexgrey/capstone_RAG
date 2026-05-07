@@ -1,0 +1,826 @@
+[PAGE 1]
+1
+Retrieval-Augmented Generation for Large
+Language Models: A Survey
+Yunfan Gaoa, Yun Xiong b, Xinyu Gao b, Kangxiang Jia b, Jinliu Pan b, Yuxi Bi c, Yi Dai a, Jiawei Sun a, Meng
+Wangc, and Haofen Wang a,c
+aShanghai Research Institute for Intelligent Autonomous Systems, Tongji University
+bShanghai Key Laboratory of Data Science, School of Computer Science, Fudan University
+cCollege of Design and Innovation, Tongji University
+Abstract—Large Language Models (LLMs) showcase impres-
+sive capabilities but encounter challenges like hallucination,
+outdated knowledge, and non-transparent, untraceable reasoning
+processes. Retrieval-Augmented Generation (RAG) has emerged
+as a promising solution by incorporating knowledge from external
+databases. This enhances the accuracy and credibility of the
+generation, particularly for knowledge-intensive tasks, and allows
+for continuous knowledge updates and integration of domain-
+specific information. RAG synergistically merges LLMs’ intrin-
+sic knowledge with the vast, dynamic repositories of external
+databases. This comprehensive review paper offers a detailed
+examination of the progression of RAG paradigms, encompassing
+the Naive RAG, the Advanced RAG, and the Modular RAG.
+It meticulously scrutinizes the tripartite foundation of RAG
+frameworks, which includes the retrieval, the generation and the
+augmentation techniques. The paper highlights the state-of-the-
+art technologies embedded in each of these critical components,
+providing a profound understanding of the advancements in RAG
+systems. Furthermore, this paper introduces up-to-date evalua-
+tion framework and benchmark. At the end, this article delineates
+the challenges currently faced and points out prospective avenues
+for research and development 1.
+Index Terms—Large language model, retrieval-augmented gen-
+eration, natural language processing, information retrieval
+I. I NTRODUCTION
+L
+ARGE language models (LLMs) have achieved remark-
+able success, though they still face signifi
+
+[PAGE 2]
+2
+Fig. 1. Technology tree of RAG research. The stages of involving RAG mainly include pre-training, fine-tuning, and inference. With the emergence of LLMs,
+research on RAG initially focused on leveraging the powerful in context learning abilities of LLMs, primarily concentrating on the inference stage. Subsequent
+research has delved deeper, gradually integrating more with the fine-tuning of LLMs. Researchers have also been exploring ways to enhance language models
+in the pre-training stage through retrieval-augmented techniques.
+advanced RAG, and modular RAG. This review contex-
+tualizes the broader scope of RAG research within the
+landscape of LLMs.
+• We identify and discuss the central technologies integral
+to the RAG process, specifically focusing on the aspects
+of “Retrieval”, “Generation” and “Augmentation”, and
+delve into their synergies, elucidating how these com-
+ponents intricately collaborate to form a cohesive and
+effective RAG framework.
+• We have summarized the current assessment methods of
+RAG, covering 26 tasks, nearly 50 datasets, outlining
+the evaluation objectives and metrics, as well as the
+current evaluation benchmarks and tools. Additionally,
+we anticipate future directions for RAG, emphasizing
+potential enhancements to tackle current challenges.
+The paper unfolds as follows: Section II introduces the
+main concept and current paradigms of RAG. The following
+three sections explore core components—“Retrieval”, “Gen-
+eration” and “Augmentation”, respectively. Section III focuses
+on optimization methods in retrieval,including indexing, query
+and embedding optimization. Section IV concentrates on post-
+retrieval process and LLM fine-tuning in generation. Section V
+analyzes the three augmentation processes. Section VI focuses
+on RAG’s downstream tasks and evaluation system. Sec-
+tion VII mainly discusses the challenges that RAG currently
+faces and its future development directions. At last, the paper
+concludes in Section VIII.
+II. O VERVIEW OF RAG
+A t
+
+[PAGE 3]
+3
+Fig. 2. A representative instance of the RAG process applied to question answering. It mainly consists of 3 steps. 1) Indexing. Documents are split into chunks,
+encoded into vectors, and stored in a vector database. 2) Retrieval. Retrieve the Top k chunks most relevant to the question based on semantic similarity. 3)
+Generation. Input the original question and the retrieved chunks together into LLM to generate the final answer.
+widespread adoption of ChatGPT. The Naive RAG follows
+a traditional process that includes indexing, retrieval, and
+generation, which is also characterized as a “Retrieve-Read”
+framework [7].
+Indexing starts with the cleaning and extraction of raw data
+in diverse formats like PDF, HTML, Word, and Markdown,
+which is then converted into a uniform plain text format. To
+accommodate the context limitations of language models, text
+is segmented into smaller, digestible chunks. Chunks are then
+encoded into vector representations using an embedding model
+and stored in vector database. This step is crucial for enabling
+efficient similarity searches in the subsequent retrieval phase.
+Retrieval. Upon receipt of a user query, the RAG system
+employs the same encoding model utilized during the indexing
+phase to transform the query into a vector representation.
+It then computes the similarity scores between the query
+vector and the vector of chunks within the indexed corpus.
+The system prioritizes and retrieves the top K chunks that
+demonstrate the greatest similarity to the query. These chunks
+are subsequently used as the expanded context in prompt.
+Generation. The posed query and selected documents are
+synthesized into a coherent prompt to which a large language
+model is tasked with formulating a response. The model’s
+approach to answering may vary depending on task-specific
+criteria, allowing it to either draw upon its inherent parametric
+knowledge or restrict its responses to the information con-
+tained within the provided documents. In cases of ongoin
+
+[PAGE 4]
+4
+Fig. 3. Comparison between the three paradigms of RAG. (Left) Naive RAG mainly consists of three parts: indexing, retrieval and generation. (Middle)
+Advanced RAG proposes multiple optimization strategies around pre-retrieval and post-retrieval, with a process similar to the Naive RAG, still following a
+chain-like structure. (Right) Modular RAG inherits and develops from the previous paradigm, showcasing greater flexibility overall. This is evident in the
+introduction of multiple specific functional modules and the replacement of existing modules. The overall process is not limited to sequential retrieval and
+generation; it includes methods such as iterative and adaptive retrieval.
+Pre-retrieval process. In this stage, the primary focus is
+on optimizing the indexing structure and the original query.
+The goal of optimizing indexing is to enhance the quality of
+the content being indexed. This involves strategies: enhancing
+data granularity, optimizing index structures, adding metadata,
+alignment optimization, and mixed retrieval. While the goal
+of query optimization is to make the user’s original question
+clearer and more suitable for the retrieval task. Common
+methods include query rewriting query transformation, query
+expansion and other techniques [7], [9]–[11].
+Post-Retrieval Process. Once relevant context is retrieved,
+it’s crucial to integrate it effectively with the query. The main
+methods in post-retrieval process include rerank chunks and
+context compressing. Re-ranking the retrieved information to
+relocate the most relevant content to the edges of the prompt is
+a key strategy. This concept has been implemented in frame-
+works such as LlamaIndex 2, LangChain3, and HayStack [12].
+Feeding all relevant documents directly into LLMs can lead
+to information overload, diluting the focus on key details with
+irrelevant content.To mitigate this, post-retrieval efforts con-
+centrate on selecting the essential information, emphasizing
+critical sections, and shortening t
+
+[PAGE 5]
+5
+aligns the text more closely with data distribution through iter-
+ative self-enhancement [17], [18]. Routing in the RAG system
+navigates through diverse data sources, selecting the optimal
+pathway for a query, whether it involves summarization,
+specific database searches, or merging different information
+streams [19]. The Predict module aims to reduce redundancy
+and noise by generating context directly through the LLM,
+ensuring relevance and accuracy [13]. Lastly, the Task Adapter
+module tailors RAG to various downstream tasks, automating
+prompt retrieval for zero-shot inputs and creating task-specific
+retrievers through few-shot query generation [20], [21] .This
+comprehensive approach not only streamlines the retrieval pro-
+cess but also significantly improves the quality and relevance
+of the information retrieved, catering to a wide array of tasks
+and queries with enhanced precision and flexibility.
+2) New Patterns: Modular RAG offers remarkable adapt-
+ability by allowing module substitution or reconfiguration
+to address specific challenges. This goes beyond the fixed
+structures of Naive and Advanced RAG, characterized by a
+simple “Retrieve” and “Read” mechanism. Moreover, Modular
+RAG expands this flexibility by integrating new modules or
+adjusting interaction flow among existing ones, enhancing its
+applicability across different tasks.
+Innovations such as the Rewrite-Retrieve-Read [7]model
+leverage the LLM’s capabilities to refine retrieval queries
+through a rewriting module and a LM-feedback mechanism
+to update rewriting model., improving task performance.
+Similarly, approaches like Generate-Read [13] replace tradi-
+tional retrieval with LLM-generated content, while Recite-
+Read [22] emphasizes retrieval from model weights, enhanc-
+ing the model’s ability to handle knowledge-intensive tasks.
+Hybrid retrieval strategies integrate keyword, semantic, and
+vector searches to cater to diverse queries. Additionally, em-
+ploying sub-queries and hypothetical document e
+
+[PAGE 6]
+6
+TABLE I
+SUMMARY OF RAG METHODS
+Method Retrieval Source Retrieval
+Data Type
+Retrieval
+Granularity
+Augmentation
+Stage
+Retrieval
+process
+CoG [29] Wikipedia Text Phrase Pre-training Iterative
+DenseX [30] FactoidWiki Text Proposition Inference Once
+EAR [31] Dataset-base Text Sentence Tuning Once
+UPRISE [20] Dataset-base Text Sentence Tuning Once
+RAST [32] Dataset-base Text Sentence Tuning Once
+Self-Mem [17] Dataset-base Text Sentence Tuning Iterative
+FLARE [24] Search Engine,Wikipedia Text Sentence Tuning Adaptive
+PGRA [33] Wikipedia Text Sentence Inference Once
+FILCO [34] Wikipedia Text Sentence Inference Once
+RADA [35] Dataset-base Text Sentence Inference Once
+Filter-rerank [36] Synthesized dataset Text Sentence Inference Once
+R-GQA [37] Dataset-base Text Sentence Pair Tuning Once
+LLM-R [38] Dataset-base Text Sentence Pair Inference Iterative
+TIGER [39] Dataset-base Text Item-base Pre-training Once
+LM-Indexer [40] Dataset-base Text Item-base Tuning Once
+BEQUE [9] Dataset-base Text Item-base Tuning Once
+CT-RAG [41] Synthesized dataset Text Item-base Tuning Once
+Atlas [42] Wikipedia, Common Crawl Text Chunk Pre-training Iterative
+RA VEN [43] Wikipedia Text Chunk Pre-training Once
+RETRO++ [44] Pre-training Corpus Text Chunk Pre-training Iterative
+INSTRUCTRETRO [45] Pre-training corpus Text Chunk Pre-training Iterative
+RRR [7] Search Engine Text Chunk Tuning Once
+RA-e2e [46] Dataset-base Text Chunk Tuning Once
+PROMPTAGATOR [21] BEIR Text Chunk Tuning Once
+AAR [47] MSMARCO,Wikipedia Text Chunk Tuning Once
+RA-DIT [27] Common Crawl,Wikipedia Text Chunk Tuning Once
+RAG-Robust [48] Wikipedia Text Chunk Tuning Once
+RA-Long-Form [49] Dataset-base Text Chunk Tuning Once
+CoN [50] Wikipedia Text Chunk Tuning Once
+Self-RAG [25] Wikipedia Text Chunk Tuning Adaptive
+BGM [26] Wikipedia Text Chunk Inference Once
+CoQ [51] Wikipedia Text Chunk Inference Iterative
+Token-Elimination [52] Wikipedia Text Chunk Inference Once
+PaperQA [53] Arxiv,Online Database,PubMed Text Chunk Inference Iter
+
+[PAGE 7]
+7
+Fig. 4. RAG compared with other model optimization methods in the aspects of “External Knowledge Required” and “Model Adaption Required”. Prompt
+Engineering requires low modifications to the model and external knowledge, focusing on harnessing the capabilities of LLMs themselves. Fine-tuning, on
+the other hand, involves further training the model. In the early stages of RAG (Naive RAG), there is a low demand for model modifications. As research
+progresses, Modular RAG has become more integrated with fine-tuning techniques.
+Unstructured Data , such as text, is the most widely used
+retrieval source, which are mainly gathered from corpus. For
+open-domain question-answering (ODQA) tasks, the primary
+retrieval sources are Wikipedia Dump with the current major
+versions including HotpotQA 4 (1st October , 2017), DPR5 (20
+December, 2018). In addition to encyclopedic data, common
+unstructured data includes cross-lingual text [19] and domain-
+specific data (such as medical [67]and legal domains [29]).
+Semi-structured data. typically refers to data that contains a
+combination of text and table information, such as PDF. Han-
+dling semi-structured data poses challenges for conventional
+RAG systems due to two main reasons. Firstly, text splitting
+processes may inadvertently separate tables, leading to data
+corruption during retrieval. Secondly, incorporating tables into
+the data can complicate semantic similarity searches. When
+dealing with semi-structured data, one approach involves lever-
+aging the code capabilities of LLMs to execute Text-2-SQL
+queries on tables within databases, such as TableGPT [85].
+Alternatively, tables can be transformed into text format for
+further analysis using text-based methods [75]. However, both
+of these methods are not optimal solutions, indicating substan-
+tial research opportunities in this area.
+Structured data , such as knowledge graphs (KGs) [86] ,
+which are typically verified and can provide more precise in-
+formation. KnowledGPT [15] gene
+
+[PAGE 8]
+8
+the appropriate retrieval granularity during inference can be
+a simple and effective strategy to improve the retrieval and
+downstream task performance of dense retrievers.
+In text, retrieval granularity ranges from fine to coarse,
+including Token, Phrase, Sentence, Proposition, Chunks, Doc-
+ument. Among them, DenseX [30]proposed the concept of
+using propositions as retrieval units. Propositions are defined
+as atomic expressions in the text, each encapsulating a unique
+factual segment and presented in a concise, self-contained nat-
+ural language format. This approach aims to enhance retrieval
+precision and relevance. On the Knowledge Graph (KG),
+retrieval granularity includes Entity, Triplet, and sub-Graph.
+The granularity of retrieval can also be adapted to downstream
+tasks, such as retrieving Item IDs [40]in recommendation tasks
+and Sentence pairs [38]. Detailed information is illustrated in
+Table I.
+B. Indexing Optimization
+In the Indexing phase, documents will be processed, seg-
+mented, and transformed into Embeddings to be stored in a
+vector database. The quality of index construction determines
+whether the correct context can be obtained in the retrieval
+phase.
+1) Chunking Strategy: The most common method is to split
+the document into chunks on a fixed number of tokens (e.g.,
+100, 256, 512) [88]. Larger chunks can capture more context,
+but they also generate more noise, requiring longer processing
+time and higher costs. While smaller chunks may not fully
+convey the necessary context, they do have less noise. How-
+ever, chunks leads to truncation within sentences, prompting
+the optimization of a recursive splits and sliding window meth-
+ods, enabling layered retrieval by merging globally related
+information across multiple retrieval processes [89]. Never-
+theless, these approaches still cannot strike a balance between
+semantic completeness and context length. Therefore, methods
+like Small2Big have been proposed, where sentences (small)
+are used as the retrieva
+
+[PAGE 9]
+9
+2) Query Transformation: The core concept is to retrieve
+chunks based on a transformed query instead of the user’s
+original query.
+Query Rewrite.The original queries are not always optimal
+for LLM retrieval, especially in real-world scenarios. There-
+fore, we can prompt LLM to rewrite the queries. In addition to
+using LLM for query rewriting, specialized smaller language
+models, such as RRR (Rewrite-retrieve-read) [7]. The imple-
+mentation of the query rewrite method in the Taobao, known
+as BEQUE [9] has notably enhanced recall effectiveness for
+long-tail queries, resulting in a rise in GMV .
+Another query transformation method is to use prompt
+engineering to let LLM generate a query based on the original
+query for subsequent retrieval. HyDE [11] construct hypothet-
+ical documents (assumed answers to the original query). It
+focuses on embedding similarity from answer to answer rather
+than seeking embedding similarity for the problem or query.
+Using the Step-back Prompting method [10], the original
+query is abstracted to generate a high-level concept question
+(step-back question). In the RAG system, both the step-back
+question and the original query are used for retrieval, and both
+the results are utilized as the basis for language model answer
+generation.
+3) Query Routing: Based on varying queries, routing to
+distinct RAG pipeline,which is suitable for a versatile RAG
+system designed to accommodate diverse scenarios.
+Metadata Router/ Filter . The first step involves extracting
+keywords (entity) from the query, followed by filtering based
+on the keywords and metadata within the chunks to narrow
+down the search scope.
+Semantic Router is another method of routing involves
+leveraging the semantic information of the query. Specific
+apprach see Semantic Router 6. Certainly, a hybrid routing
+approach can also be employed, combining both semantic and
+metadata-based methods for enhanced query routing.
+D. Embedding
+In RAG, retrieval is achieved by calculating the similarity
+
+[PAGE 10]
+10
+introduces an innovative method for integrating knowledge
+into white-box models via directive fine-tuning [75]. In this
+approach, the retriever module is directly substituted to gen-
+erate relevant documents according to a query. This method
+assists in addressing the difficulties encountered during the
+fine-tuning process and enhances model performance.
+IV. G ENERATION
+After retrieval, it is not a good practice to directly input all
+the retrieved information to the LLM for answering questions.
+Following will introduce adjustments from two perspectives:
+adjusting the retrieved content and adjusting the LLM.
+A. Context Curation
+Redundant information can interfere with the final gener-
+ation of LLM, and overly long contexts can also lead LLM
+to the “Lost in the middle” problem [98]. Like humans, LLM
+tends to only focus on the beginning and end of long texts,
+while forgetting the middle portion. Therefore, in the RAG
+system, we typically need to further process the retrieved
+content.
+1) Reranking: Reranking fundamentally reorders document
+chunks to highlight the most pertinent results first, effectively
+reducing the overall document pool, severing a dual purpose
+in information retrieval, acting as both an enhancer and a
+filter, delivering refined inputs for more precise language
+model processing [70]. Reranking can be performed using
+rule-based methods that depend on predefined metrics like
+Diversity, Relevance, and MRR, or model-based approaches
+like Encoder-Decoder models from the BERT series (e.g.,
+SpanBERT), specialized reranking models such as Cohere
+rerank or bge-raranker-large, and general large language mod-
+els like GPT [12], [99].
+2) Context Selection/Compression: A common misconcep-
+tion in the RAG process is the belief that retrieving as many
+relevant documents as possible and concatenating them to form
+a lengthy retrieval prompt is beneficial. However, excessive
+context can introduce more noise, diminishing the LLM’s
+perception of key information .
+(Long
+
+[PAGE 11]
+11
+Fig. 5. In addition to the most common once retrieval, RAG also includes three types of retrieval augmentation processes. (left) Iterative retrieval involves
+alternating between retrieval and generation, allowing for richer and more targeted context from the knowledge base at each step. (Middle) Recursive retrieval
+involves gradually refining the user query and breaking down the problem into sub-problems, then continuously solving complex problems through retrieval
+and generation. (Right) Adaptive retrieval focuses on enabling the RAG system to autonomously determine whether external knowledge retrieval is necessary
+and when to stop retrieval and generation, often utilizing LLM-generated special tokens for control.
+base for LLMs. This approach has been shown to enhance
+the robustness of subsequent answer generation by offering
+additional contextual references through multiple retrieval
+iterations. However, it may be affected by semantic discon-
+tinuity and the accumulation of irrelevant information. ITER-
+RETGEN [14] employs a synergistic approach that lever-
+ages “retrieval-enhanced generation” alongside “generation-
+enhanced retrieval” for tasks that necessitate the reproduction
+of specific information. The model harnesses the content
+required to address the input task as a contextual basis for
+retrieving pertinent knowledge, which in turn facilitates the
+generation of improved responses in subsequent iterations.
+B. Recursive Retrieval
+Recursive retrieval is often used in information retrieval and
+NLP to improve the depth and relevance of search results.
+The process involves iteratively refining search queries based
+on the results obtained from previous searches. Recursive
+Retrieval aims to enhance the search experience by gradu-
+ally converging on the most pertinent information through a
+feedback loop. IRCoT [61] uses chain-of-thought to guide
+the retrieval process and refines the CoT with the obtained
+retrieval results. ToC [57] creates a clarification tree t
+
+[PAGE 12]
+12
+probability of generated terms [24]. When the probability falls
+below a certain threshold would activates the retrieval system
+to collect relevant information, thus optimizing the retrieval
+cycle. Self-RAG [25] introduces “reflection tokens” that allow
+the model to introspect its outputs. These tokens come in
+two varieties: “retrieve” and “critic”. The model autonomously
+decides when to activate retrieval, or alternatively, a predefined
+threshold may trigger the process. During retrieval, the gen-
+erator conducts a fragment-level beam search across multiple
+paragraphs to derive the most coherent sequence. Critic scores
+are used to update the subdivision scores, with the flexibility
+to adjust these weights during inference, tailoring the model’s
+behavior. Self-RAG’s design obviates the need for additional
+classifiers or reliance on Natural Language Inference (NLI)
+models, thus streamlining the decision-making process for
+when to engage retrieval mechanisms and improving the
+model’s autonomous judgment capabilities in generating ac-
+curate responses.
+VI. T ASK AND EVALUATION
+The rapid advancement and growing adoption of RAG
+in the field of NLP have propelled the evaluation of RAG
+models to the forefront of research in the LLMs community.
+The primary objective of this evaluation is to comprehend
+and optimize the performance of RAG models across diverse
+application scenarios.This chapter will mainly introduce the
+main downstream tasks of RAG, datasets, and how to evaluate
+RAG systems.
+A. Downstream Task
+The core task of RAG remains Question Answering (QA),
+including traditional single-hop/multi-hop QA, multiple-
+choice, domain-specific QA as well as long-form scenarios
+suitable for RAG. In addition to QA, RAG is continuously
+being expanded into multiple downstream tasks, such as Infor-
+mation Extraction (IE), dialogue generation, code search, etc.
+The main downstream tasks of RAG and their corresponding
+datasets are summarized in Table II.
+B. Evaluation Target
+Histor
+
+[PAGE 13]
+13
+TABLE II
+DOWNSTREAM TASKS AND DATASETS OF RAG
+Task Sub Task Dataset Method
+QA Single-hop Natural Qustion(NQ) [111]
+[26], [30], [34], [42], [45], [50], [52], [59], [64], [82]
+[3], [4], [22], [27], [40], [43], [54], [62], [71], [112]
+[20], [44], [72]
+TriviaQA(TQA) [113]
+[13], [30], [34], [45], [50], [64]
+[4], [27], [59], [62], [112]
+[22], [25], [43], [44], [71], [72]
+SQuAD [114] [20], [23], [30], [32], [45], [69], [112]
+Web Questions(WebQ) [115] [3], [4], [13], [30], [50], [68]
+PopQA [116] [7], [25], [67]
+MS MARCO [117] [4], [40], [52]
+Multi-hop HotpotQA [118] [23], [26], [31], [34], [47], [51], [61], [82]
+[7], [14], [22], [27], [59], [62], [69], [71], [91]
+2WikiMultiHopQA [119] [14], [24], [48], [59], [61], [91]
+MuSiQue [120] [14], [51], [61], [91]
+Long-form QA ELI5 [121] [27], [34], [43], [49], [51]
+NarrativeQA(NQA) [122] [45], [60], [63], [123]
+ASQA [124] [24], [57]
+QMSum(QM) [125] [60], [123]
+Domain QA Qasper [126] [60], [63]
+COVID-QA [127] [35], [46]
+CMB [128],MMCU Medical [129] [81]
+Multi-Choice QA QuALITY [130] [60], [63]
+ARC [131] [25], [67]
+CommonsenseQA [132] [58], [66]
+Graph QA GraphQA [84] [84]
+Dialog Dialog Generation Wizard of Wikipedia (WoW) [133] [13], [27], [34], [42]
+Personal Dialog KBP [134] [74], [135]
+DuleMon [136] [74]
+Task-oriented Dialog CamRest [137] [78], [79]
+Recommendation Amazon(Toys,Sport,Beauty) [138] [39], [40]
+IE Event Argument Extraction WikiEvent [139] [13], [27], [37], [42]
+RAMS [140] [36], [37]
+Relation Extraction T-REx [141],ZsRE [142] [27], [51]
+Reasoning Commonsense Reasoning HellaSwag [143] [20], [66]
+CoT Reasoning CoT Reasoning [144] [27]
+Complex Reasoning CSQA [145] [55]
+Others Language Understanding MMLU [146] [7], [27], [28], [42], [43], [47], [72]
+Language Modeling WikiText-103 [147] [5], [29], [64], [71]
+StrategyQA [148] [14], [24], [48], [51], [55], [58]
+Fact Checking/Verification FEVER [149] [4], [13], [27], [34], [42], [50]
+PubHealth [150] [25], [67]
+Text Generation Biography [151] [67]
+Text Summarization WikiASP [1
+
+[PAGE 14]
+14
+TABLE III
+SUMMARY OF METRICS APPLICABLE FOR EVALUATION ASPECTS OF RAG
+Context
+Relevance Faithfulness Answer
+Relevance
+Noise
+Robustness
+Negative
+Rejection
+Information
+Integration
+Counterfactual
+Robustness
+Accuracy ✓ ✓ ✓ ✓ ✓ ✓ ✓
+EM ✓
+Recall ✓
+Precision ✓ ✓
+R-Rate ✓
+Cosine Similarity ✓
+Hit Rate ✓
+MRR ✓
+NDCG ✓
+BLEU ✓ ✓ ✓
+ROUGE/ROUGE-L ✓ ✓ ✓
+The specific metrics for each evaluation aspect are sum-
+marized in Table III. It is essential to recognize that these
+metrics, derived from related work, are traditional measures
+and do not yet represent a mature or standardized approach for
+quantifying RAG evaluation aspects. Custom metrics tailored
+to the nuances of RAG models, though not included here, have
+also been developed in some evaluation studies.
+D. Evaluation Benchmarks and Tools
+A series of benchmark tests and tools have been proposed
+to facilitate the evaluation of RAG.These instruments furnish
+quantitative metrics that not only gauge RAG model perfor-
+mance but also enhance comprehension of the model’s capabil-
+ities across various evaluation aspects. Prominent benchmarks
+such as RGB, RECALL and CRUD [167]–[169] focus on
+appraising the essential abilities of RAG models. Concur-
+rently, state-of-the-art automated tools like RAGAS [164],
+ARES [165], and TruLens 8 employ LLMs to adjudicate the
+quality scores. These tools and benchmarks collectively form
+a robust framework for the systematic evaluation of RAG
+models, as summarized in Table IV.
+VII. D ISCUSSION AND FUTURE PROSPECTS
+Despite the considerable progress in RAG technology, sev-
+eral challenges persist that warrant in-depth research.This
+chapter will mainly introduce the current challenges and future
+research directions faced by RAG.
+A. RAG vs Long Context
+With the deepening of related research, the context of LLMs
+is continuously expanding [170]–[172]. Presently, LLMs can
+effortlessly manage contexts exceeding 200,000 tokens 9. This
+capability signifies that long-document question answering,
+previously relian
+
+[PAGE 15]
+15
+TABLE IV
+SUMMARY OF EVALUATION FRAMEWORKS
+Evaluation Framework Evaluation Targets Evaluation Aspects Quantitative Metrics
+RGB† Retrieval Quality
+Generation Quality
+Noise Robustness
+Negative Rejection
+Information Integration
+Counterfactual Robustness
+Accuracy
+EM
+Accuracy
+Accuracy
+RECALL† Generation Quality Counterfactual Robustness R-Rate (Reappearance Rate)
+RAGAS‡ Retrieval Quality
+Generation Quality
+Context Relevance
+Faithfulness
+Answer Relevance
+*
+*
+Cosine Similarity
+ARES‡ Retrieval Quality
+Generation Quality
+Context Relevance
+Faithfulness
+Answer Relevance
+Accuracy
+Accuracy
+Accuracy
+TruLens‡ Retrieval Quality
+Generation Quality
+Context Relevance
+Faithfulness
+Answer Relevance
+*
+*
+*
+CRUD† Retrieval Quality
+Generation Quality
+Creative Generation
+Knowledge-intensive QA
+Error Correction
+Summarization
+BLEU
+ROUGE-L
+BertScore
+RAGQuestEval
+† represents a benchmark, and ‡ represents a tool. * denotes customized quantitative metrics, which deviate from traditional
+metrics. Readers are encouraged to consult pertinent literature for the specific quantification formulas associated with these
+metrics, as required.
+and non-parameterized advantages are areas ripe for explo-
+ration [27]. Another trend is to introduce SLMs with specific
+functionalities into RAG and fine-tuned by the results of RAG
+system. For example, CRAG [67] trains a lightweight retrieval
+evaluator to assess the overall quality of the retrieved docu-
+ments for a query and triggers different knowledge retrieval
+actions based on confidence levels.
+D. Scaling laws of RAG
+End-to-end RAG models and pre-trained models based
+on RAG are still one of the focuses of current re-
+searchers [173].The parameters of these models are one of
+the key factors.While scaling laws [174] are established for
+LLMs, their applicability to RAG remains uncertain. Initial
+studies like RETRO++ [44] have begun to address this, yet the
+parameter count in RAG models still lags behind that of LLMs.
+The possibility of an Inverse Scaling Law 10,
+
+[PAGE 16]
+16
+Fig. 6. Summary of RAG ecosystem
+initial learning curve. 3) Specialization - optimizing RAG to
+better serve production environments.
+The mutual growth of RAG models and their technology
+stacks is evident; technological advancements continuously
+establish new standards for existing infrastructure. In turn,
+enhancements to the technology stack drive the development
+of RAG capabilities. RAG toolkits are converging into a
+foundational technology stack, laying the groundwork for
+advanced enterprise applications. However, a fully integrated,
+comprehensive platform concept is still in the future, requiring
+further innovation and development.
+F . Multi-modal RAG
+RAG has transcended its initial text-based question-
+answering confines, embracing a diverse array of modal data.
+This expansion has spawned innovative multimodal models
+that integrate RAG concepts across various domains:
+Image. RA-CM3 [176] stands as a pioneering multimodal
+model of both retrieving and generating text and images.
+BLIP-2 [177] leverages frozen image encoders alongside
+LLMs for efficient visual language pre-training, enabling zero-
+shot image-to-text conversions. The “Visualize Before You
+Write” method [178] employs image generation to steer the
+LM’s text generation, showing promise in open-ended text
+generation tasks.
+Audio and Video . The GSS method retrieves and stitches
+together audio clips to convert machine-translated data into
+speech-translated data [179]. UEOP marks a significant ad-
+vancement in end-to-end automatic speech recognition by
+incorporating external, offline strategies for voice-to-text con-
+version [180]. Additionally, KNN-based attention fusion lever-
+ages audio embeddings and semantically related text embed-
+dings to refine ASR, thereby accelerating domain adaptation.
+Vid2Seq augments language models with specialized temporal
+markers, facilitating the prediction of event boundaries and
+textual descriptions within a unified output sequence [181].
+Code. RBPS [182] excels in sm
+
+[PAGE 17]
+17
+The growing ecosystem of RAG is evidenced by the rise in
+RAG-centric AI applications and the continuous development
+of supportive tools. As RAG’s application landscape broadens,
+there is a need to refine evaluation methodologies to keep
+pace with its evolution. Ensuring accurate and representative
+performance assessments is crucial for fully capturing RAG’s
+contributions to the AI research and development community.
+REFERENCES
+[1] N. Kandpal, H. Deng, A. Roberts, E. Wallace, and C. Raffel, “Large
+language models struggle to learn long-tail knowledge,” in Interna-
+tional Conference on Machine Learning . PMLR, 2023, pp. 15 696–
+15 707.
+[2] Y . Zhang, Y . Li, L. Cui, D. Cai, L. Liu, T. Fu, X. Huang, E. Zhao,
+Y . Zhang, Y . Chenet al., “Siren’s song in the ai ocean: A survey on hal-
+lucination in large language models,” arXiv preprint arXiv:2309.01219,
+2023.
+[3] D. Arora, A. Kini, S. R. Chowdhury, N. Natarajan, G. Sinha, and
+A. Sharma, “Gar-meets-rag paradigm for zero-shot information re-
+trieval,” arXiv preprint arXiv:2310.20158 , 2023.
+[4] P. Lewis, E. Perez, A. Piktus, F. Petroni, V . Karpukhin, N. Goyal,
+H. K ¨uttler, M. Lewis, W.-t. Yih, T. Rockt ¨aschel et al. , “Retrieval-
+augmented generation for knowledge-intensive nlp tasks,” Advances in
+Neural Information Processing Systems, vol. 33, pp. 9459–9474, 2020.
+[5] S. Borgeaud, A. Mensch, J. Hoffmann, T. Cai, E. Rutherford, K. Milli-
+can, G. B. Van Den Driessche, J.-B. Lespiau, B. Damoc, A. Clarket al.,
+“Improving language models by retrieving from trillions of tokens,”
+in International conference on machine learning . PMLR, 2022, pp.
+2206–2240.
+[6] L. Ouyang, J. Wu, X. Jiang, D. Almeida, C. Wainwright, P. Mishkin,
+C. Zhang, S. Agarwal, K. Slama, A. Ray et al. , “Training language
+models to follow instructions with human feedback,” Advances in
+neural information processing systems , vol. 35, pp. 27 730–27 744,
+2022.
+[7] X. Ma, Y . Gong, P. He, H. Zhao, and N. Duan, “Query rewrit-
+ing for retrieval-augmented large
+
+[PAGE 18]
+18
+[44] B. Wang, W. Ping, P. Xu, L. McAfee, Z. Liu, M. Shoeybi, Y . Dong,
+O. Kuchaiev, B. Li, C. Xiao et al. , “Shall we pretrain autoregressive
+language models with retrieval? a comprehensive study,”arXiv preprint
+arXiv:2304.06762, 2023.
+[45] B. Wang, W. Ping, L. McAfee, P. Xu, B. Li, M. Shoeybi, and B. Catan-
+zaro, “Instructretro: Instruction tuning post retrieval-augmented pre-
+training,” arXiv preprint arXiv:2310.07713 , 2023.
+[46] S. Siriwardhana, R. Weerasekera, E. Wen, T. Kaluarachchi, R. Rana,
+and S. Nanayakkara, “Improving the domain adaptation of retrieval
+augmented generation (rag) models for open domain question answer-
+ing,” Transactions of the Association for Computational Linguistics ,
+vol. 11, pp. 1–17, 2023.
+[47] Z. Yu, C. Xiong, S. Yu, and Z. Liu, “Augmentation-adapted retriever
+improves generalization of language models as generic plug-in,” arXiv
+preprint arXiv:2305.17331, 2023.
+[48] O. Yoran, T. Wolfson, O. Ram, and J. Berant, “Making retrieval-
+augmented language models robust to irrelevant context,” arXiv
+preprint arXiv:2310.01558, 2023.
+[49] H.-T. Chen, F. Xu, S. A. Arora, and E. Choi, “Understanding re-
+trieval augmentation for long-form question answering,” arXiv preprint
+arXiv:2310.12150, 2023.
+[50] W. Yu, H. Zhang, X. Pan, K. Ma, H. Wang, and D. Yu, “Chain-of-note:
+Enhancing robustness in retrieval-augmented language models,” arXiv
+preprint arXiv:2311.09210, 2023.
+[51] S. Xu, L. Pang, H. Shen, X. Cheng, and T.-S. Chua, “Search-in-the-
+chain: Towards accurate, credible and traceable large language models
+for knowledgeintensive tasks,” CoRR, vol. abs/2304.14732 , 2023.
+[52] M. Berchansky, P. Izsak, A. Caciularu, I. Dagan, and M. Wasserblat,
+“Optimizing retrieval-augmented reader models via token elimination,”
+arXiv preprint arXiv:2310.13682 , 2023.
+[53] J. L ´ala, O. O’Donoghue, A. Shtedritski, S. Cox, S. G. Rodriques,
+and A. D. White, “Paperqa: Retrieval-augmented generative agent for
+scientific research,” arXiv preprint arXiv:2312.07559 , 
+
+[PAGE 19]
+19
+[89] Langchain, “Recursively split by character,” https://python.langchain.
+com/docs/modules/data connection/document transformers/recursive
+text splitter, 2023.
+[90] S. Yang, “Advanced rag 01: Small-to-
+big retrieval,” https://towardsdatascience.com/
+advanced-rag-01-small-to-big-retrieval-172181b396d4, 2023.
+[91] Y . Wang, N. Lipka, R. A. Rossi, A. Siu, R. Zhang, and T. Derr,
+“Knowledge graph prompting for multi-document question answering,”
+arXiv preprint arXiv:2308.11730 , 2023.
+[92] D. Zhou, N. Sch ¨arli, L. Hou, J. Wei, N. Scales, X. Wang, D. Schu-
+urmans, C. Cui, O. Bousquet, Q. Le et al., “Least-to-most prompting
+enables complex reasoning in large language models,” arXiv preprint
+arXiv:2205.10625, 2022.
+[93] S. Dhuliawala, M. Komeili, J. Xu, R. Raileanu, X. Li, A. Celikyilmaz,
+and J. Weston, “Chain-of-verification reduces hallucination in large
+language models,” arXiv preprint arXiv:2309.11495 , 2023.
+[94] X. Li and J. Li, “Angle-optimized text embeddings,” arXiv preprint
+arXiv:2309.12871, 2023.
+[95] V oyageAI, “V oyage’s embedding models,” https://docs.voyageai.com/
+embeddings/, 2023.
+[96] BAAI, “Flagembedding,” https://github.com/FlagOpen/
+FlagEmbedding, 2023.
+[97] P. Zhang, S. Xiao, Z. Liu, Z. Dou, and J.-Y . Nie, “Retrieve anything
+to augment large language models,” arXiv preprint arXiv:2310.07554 ,
+2023.
+[98] N. F. Liu, K. Lin, J. Hewitt, A. Paranjape, M. Bevilacqua, F. Petroni,
+and P. Liang, “Lost in the middle: How language models use long
+contexts,” arXiv preprint arXiv:2307.03172 , 2023.
+[99] Y . Gao, T. Sheng, Y . Xiang, Y . Xiong, H. Wang, and J. Zhang, “Chat-
+rec: Towards interactive and explainable llms-augmented recommender
+system,” arXiv preprint arXiv:2303.14524 , 2023.
+[100] N. Anderson, C. Wilson, and S. D. Richardson, “Lingua: Addressing
+scenarios for live interpretation and automatic dubbing,” inProceedings
+of the 15th Biennial Conference of the Association for Machine
+Translation in the Americas (Volume 2: Users and Providers Track
+and
+
+[PAGE 20]
+20
+planner for personalized knowledge-grounded dialogue,”arXiv preprint
+arXiv:2310.08840, 2023.
+[135] ——, “Large language models as source planner for personal-
+ized knowledge-grounded dialogue,” arXiv preprint arXiv:2310.08840,
+2023.
+[136] X. Xu, Z. Gou, W. Wu, Z.-Y . Niu, H. Wu, H. Wang, and S. Wang,
+“Long time no see! open-domain conversation with long-term persona
+memory,” arXiv preprint arXiv:2203.05797 , 2022.
+[137] T.-H. Wen, M. Gasic, N. Mrksic, L. M. Rojas-Barahona, P.-H.
+Su, S. Ultes, D. Vandyke, and S. Young, “Conditional generation
+and snapshot learning in neural dialogue systems,” arXiv preprint
+arXiv:1606.03352, 2016.
+[138] R. He and J. McAuley, “Ups and downs: Modeling the visual evolution
+of fashion trends with one-class collaborative filtering,” in proceedings
+of the 25th international conference on world wide web , 2016, pp.
+507–517.
+[139] S. Li, H. Ji, and J. Han, “Document-level event argument extraction
+by conditional generation,” arXiv preprint arXiv:2104.05919 , 2021.
+[140] S. Ebner, P. Xia, R. Culkin, K. Rawlins, and B. Van Durme, “Multi-
+sentence argument linking,” arXiv preprint arXiv:1911.03766 , 2019.
+[141] H. Elsahar, P. V ougiouklis, A. Remaci, C. Gravier, J. Hare, F. Laforest,
+and E. Simperl, “T-rex: A large scale alignment of natural language
+with knowledge base triples,” in Proceedings of the Eleventh Inter-
+national Conference on Language Resources and Evaluation (LREC
+2018), 2018.
+[142] O. Levy, M. Seo, E. Choi, and L. Zettlemoyer, “Zero-shot relation ex-
+traction via reading comprehension,” arXiv preprint arXiv:1706.04115,
+2017.
+[143] R. Zellers, A. Holtzman, Y . Bisk, A. Farhadi, and Y . Choi, “Hel-
+laswag: Can a machine really finish your sentence?” arXiv preprint
+arXiv:1905.07830, 2019.
+[144] S. Kim, S. J. Joo, D. Kim, J. Jang, S. Ye, J. Shin, and M. Seo,
+“The cot collection: Improving zero-shot and few-shot learning of
+language models via chain-of-thought fine-tuning,” arXiv preprint
+arXiv:2305.14045, 2023.
+[145] A. Saha, V . 
+
+[PAGE 21]
+21
+[181] A. Yang, A. Nagrani, P. H. Seo, A. Miech, J. Pont-Tuset, I. Laptev,
+J. Sivic, and C. Schmid, “Vid2seq: Large-scale pretraining of a visual
+language model for dense video captioning,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+2023, pp. 10 714–10 726.
+[182] N. Nashid, M. Sintaha, and A. Mesbah, “Retrieval-based prompt
+selection for code-related few-shot learning,” in 2023 IEEE/ACM 45th
+International Conference on Software Engineering (ICSE) , 2023, pp.
+2450–2462.

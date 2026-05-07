@@ -1,172 +1,191 @@
 """
-src/retrieval/keyword_adapter.py
+keyword_retrieval/src/retrieval/keyword_adapter.py
+===================================================
 Backend-facing adapter for the Keyword Retrieval module.
 
-Exposes two clean functions:
-    ingest(file_paths, chunk_size, chunk_overlap) -> dict
-    retrieve(query, top_k) -> dict
+Mirrors the pattern of vector_retrieval/src/retrieval/vector_adapter.py.
+This is the REAL implementation. The backend bridge at
+backend/app/retrieval/keyword_adapter.py calls into this file via
+sys.path injection — it never reimplements the logic itself.
 
-Ingestion is INCREMENTAL: new documents are appended to the existing BM25
-index and chunk records. Re-uploading a file with the same filename replaces
-only that document's chunks (deduplication by source filename).
+Exposes two functions matching the shared adapter contract:
 
-Contract references:
-    shared_data/schemas/retrieval_request.schema.json
-    shared_data/schemas/retrieval_response.schema.json
+    ingest(chunks, document_id)  -> dict
+    retrieve(query, top_k)       -> dict
+
+Index files saved to keyword_retrieval/ root (same folder as this module):
+    keyword_bm25.pkl    — BM25Okapi model
+    keyword_chunks.pkl  — list of chunk dicts
+    keyword_index.pkl   — inverted index (stub, for future use)
+
+The backend passes pre-parsed, pre-chunked chunk dicts (already in the
+shared schema) so this adapter does NOT need to re-load or re-chunk files.
+Tokenisation is done here using Olivier's preprocessing pipeline.
 """
 
 import os
 import pickle
 import time
 import threading
+import logging
 
-from indexing.indexer    import build_pipeline
-from indexing.bm25_store import load_bm25, build_bm25, save_bm25
-from retrieval.retriever import retrieve as _retrieve
+logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# persistence paths
-# ---------------------------------------------------------------------------
-INDEX_PATH  = os.environ.get('KEYWORD_INDEX_PATH',  'keyword_index.pkl')
-BM25_PATH   = os.environ.get('KEYWORD_BM25_PATH',   'keyword_bm25.pkl')
-CHUNKS_PATH = os.environ.get('KEYWORD_CHUNKS_PATH', 'keyword_chunks.pkl')
+# ── Index paths (relative to keyword_retrieval/ root) ────────────────────────
+# The backend bridge os.chdir()s to keyword_retrieval/ before calling us,
+# so these relative paths resolve correctly in both contexts.
+_BM25_PATH   = "keyword_bm25.pkl"
+_CHUNKS_PATH = "keyword_chunks.pkl"
+_INDEX_PATH  = "keyword_index.pkl"
 
-# ---------------------------------------------------------------------------
-# module-level state
-# ---------------------------------------------------------------------------
-_bm25          = None
-_index         = None
-_chunk_records = None
-_lock          = threading.RLock()  # serialise state resets
+_lock = threading.RLock()
 
 
-def _load_state():
-    global _bm25, _index, _chunk_records
-    _bm25, _index, _chunk_records = load_bm25(BM25_PATH, INDEX_PATH, CHUNKS_PATH)
+# ── Public interface ──────────────────────────────────────────────────────────
 
-
-def _reset_state():
-    global _bm25, _index, _chunk_records
-    _bm25 = _index = _chunk_records = None
-_lock          = threading.RLock()  # serialise state resets
-
-
-# ---------------------------------------------------------------------------
-# public interface
-# ---------------------------------------------------------------------------
-
-def ingest(
-    file_paths:    list,
-    chunk_size:    int = 300,
-    chunk_overlap: int = 50,
-) -> dict:
+def ingest(chunks: list, document_id: str) -> dict:
     """
-    Incrementally ingest one or more documents into the keyword index.
+    Build/update the BM25 index with chunks from a newly uploaded document.
 
-    New documents are APPENDED. Re-uploading a file with the same filename
-    replaces only that document's chunks.
+    Merges with any existing chunks, deduplicating by document_id so
+    re-uploading the same document replaces only its prior chunks.
+
+    The backend chunker already produces chunks in the shared schema:
+        {chunk_id, document_id, source_name, text, page, metadata, ...}
+
+    Tokenisation uses Olivier's preprocessing pipeline (NLTK + stemming)
+    for consistency with the standalone keyword research pipeline.
 
     Returns:
         {"status": "ok"|"error", "documents_ingested": int,
          "total_chunks": int, "latency_ms": float, "error": str|None}
     """
-    if not file_paths:
-        raise ValueError('file_paths must contain at least one file path.')
+    start = time.perf_counter()
+
+    with _lock:
+        try:
+            from rank_bm25 import BM25Okapi
+            from preprocessing.preprocess import tokenize_chunk, detect_language
+
+            # Load existing state
+            existing: list = []
+            if os.path.exists(_CHUNKS_PATH):
+                with open(_CHUNKS_PATH, "rb") as f:
+                    existing = pickle.load(f)
+
+            # Remove prior chunks for this document (re-ingest safety)
+            existing = [c for c in existing if c.get("document_id") != document_id]
+
+            all_chunks = existing + chunks
+
+            # Detect language from first chunk for tokenisation
+            sample_text = chunks[0]["text"] if chunks else ""
+            _, nltk_lang = detect_language(sample_text)
+
+            # Tokenise using Olivier's pipeline (lowercase → stopwords → stem)
+            tokenized = [tokenize_chunk(c["text"], nltk_lang) for c in all_chunks]
+
+            bm25 = BM25Okapi(tokenized)
+
+            with open(_BM25_PATH,   "wb") as f: pickle.dump(bm25,      f)
+            with open(_CHUNKS_PATH, "wb") as f: pickle.dump(all_chunks, f)
+            # Write stub inverted index for compatibility
+            if not os.path.exists(_INDEX_PATH):
+                with open(_INDEX_PATH, "wb") as f: pickle.dump({}, f)
+
+            latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            print(
+                f"  ✅ Keyword (BM25): {len(chunks)} new, "
+                f"{len(existing)} kept, {len(all_chunks)} total"
+            )
+            return {
+                "status":             "ok",
+                "documents_ingested": 1,
+                "total_chunks":       len(all_chunks),
+                "latency_ms":         latency_ms,
+                "error":              None,
+            }
+
+        except Exception as e:
+            latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            logger.warning(f"  ⚠️  Keyword ingest error: {e}")
+            return {
+                "status":             "error",
+                "documents_ingested": 0,
+                "total_chunks":       0,
+                "latency_ms":         latency_ms,
+                "error":              str(e),
+            }
+
+
+def retrieve(query: str, top_k: int = 5) -> dict:
+    """
+    Score all indexed chunks with BM25 and return the top_k results.
+
+    Tokenises the query using the same NLTK pipeline as ingest()
+    so query tokens match the index tokens exactly.
+
+    Returns:
+        {"query": str, "method": "keyword", "results": list[dict],
+         "latency_ms": float}
+
+    Raises:
+        FileNotFoundError: if index has not been built yet (no uploads)
+    """
+    if not query or not query.strip():
+        raise ValueError("query cannot be empty.")
+
+    if not os.path.exists(_BM25_PATH) or not os.path.exists(_CHUNKS_PATH):
+        raise FileNotFoundError(
+            "No keyword index found — upload documents first"
+        )
 
     start = time.perf_counter()
 
     try:
-        # ── Load existing chunks if present ───────────────────────────────
-        if os.path.exists(CHUNKS_PATH):
-            with open(CHUNKS_PATH, 'rb') as f:
-                existing_chunks = pickle.load(f)
-        else:
-            existing_chunks = []
-
-        existing_sources = {c['source'] for c in existing_chunks}
-
-        # ── Build new chunks from provided files ──────────────────────────
-        new_chunk_records, _ = build_pipeline(
-            file_paths    = file_paths,
-            chunk_size    = chunk_size,
-            chunk_overlap = chunk_overlap,
-            index_path    = '_tmp_index.pkl',   # temp — merged below
-            bm25_path     = '_tmp_bm25.pkl',
-            chunks_path   = '_tmp_chunks.pkl',
-        )
-
-        # ── Determine which sources to replace ────────────────────────────
-        new_sources = {c['source'] for c in new_chunk_records}
-        kept_chunks = [c for c in existing_chunks
-                       if c['source'] not in new_sources]
-
-        all_chunks = kept_chunks + new_chunk_records
-
-        # ── Rebuild BM25 + inverted index over ALL chunks ─────────────────
         from preprocessing.preprocess import tokenize_chunk, detect_language
-        from indexing.indexer import build_inverted_index
 
-        # Detect language from combined text sample
-        sample          = ' '.join(c['text'] for c in all_chunks[:20])
-        _, nltk_lang    = detect_language(sample)
-        tokenized       = [tokenize_chunk(c['text'], nltk_lang) for c in all_chunks]
+        with open(_BM25_PATH,   "rb") as f: bm25   = pickle.load(f)
+        with open(_CHUNKS_PATH, "rb") as f: chunks = pickle.load(f)
 
-        new_index       = build_inverted_index(all_chunks, tokenized)
-        new_bm25        = build_bm25(tokenized)
+        _, nltk_lang    = detect_language(query)
+        query_tokens    = tokenize_chunk(query, nltk_lang)
 
-        # ── Persist merged state ──────────────────────────────────────────
-        with open(INDEX_PATH,  'wb') as f: pickle.dump(new_index,  f)
-        with open(CHUNKS_PATH, 'wb') as f: pickle.dump(all_chunks, f)
-        save_bm25(new_bm25, BM25_PATH)
+        if not query_tokens:
+            # All words were stopwords — fall back to simple whitespace split
+            query_tokens = query.lower().split()
 
-        # Clean up temp files
-        for tmp in ('_tmp_index.pkl', '_tmp_bm25.pkl', '_tmp_chunks.pkl'):
-            if os.path.exists(tmp):
-                os.remove(tmp)
+        scores  = bm25.get_scores(query_tokens)
+        safe_k  = min(top_k, len(chunks))
+        top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:safe_k]
 
-        with _lock:
-            _reset_state()  # force reload on next retrieve()
+        results = []
+        for rank, idx in enumerate(top_idx):
+            c = chunks[idx]
+            results.append({
+                "rank":           rank + 1,
+                "chunk_id":       c.get("chunk_id",       f"bm25_{idx}"),
+                "document_id":    c.get("document_id",    ""),
+                "document_title": c.get("document_title", ""),
+                "source":         c.get("source_name") or c.get("source") or "Unknown",
+                "source_name":    c.get("source_name") or c.get("source") or "Unknown",
+                "text":           c.get("text",           ""),
+                "score":          float(scores[idx]),
+                "bm25_score":     float(scores[idx]),
+                "citation":       c.get("citation", ""),
+                "metadata":       c.get("metadata", {}),
+                "page":           c.get("page"),
+            })
 
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
-        print(f'  ✅ Keyword index: {len(new_chunk_records)} new chunks, '
-              f'{len(kept_chunks)} kept, {len(all_chunks)} total')
-
         return {
-            'status':             'ok',
-            'documents_ingested': len(file_paths),
-            'total_chunks':       len(all_chunks),
-            'latency_ms':         latency_ms,
-            'error':              None,
+            "query":      query,
+            "method":     "keyword",
+            "results":    results,
+            "latency_ms": latency_ms,
         }
 
+    except FileNotFoundError:
+        raise
     except Exception as e:
-        for tmp in ('_tmp_index.pkl', '_tmp_bm25.pkl', '_tmp_chunks.pkl'):
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        latency_ms = round((time.perf_counter() - start) * 1000, 2)
-        return {'status': 'error', 'documents_ingested': 0, 'total_chunks': 0,
-                'latency_ms': latency_ms, 'error': str(e)}
-
-
-def retrieve(query: str, top_k: int = 3) -> dict:
-    """
-    Retrieve top-k chunks using BM25 keyword search.
-
-    Loads state on first call; reuses across subsequent calls.
-    """
-    if not query or not query.strip():
-        raise ValueError('query cannot be empty.')
-
-    if _bm25 is None:
-        _load_state()
-
-    start      = time.perf_counter()
-    results    = _retrieve(query, _bm25, _chunk_records, _index, top_k=top_k)
-    latency_ms = round((time.perf_counter() - start) * 1000, 2)
-
-    return {
-        'query':      query,
-        'method':     'keyword',
-        'results':    results,
-        'latency_ms': latency_ms,
-    }
+        raise RuntimeError(f"Keyword retrieval failed: {e}")

@@ -48,7 +48,7 @@ capstone_RAG/
 
 **Backend** — create `backend/.env`:
 ```env
-POSTGRE_URL=        postgresql://user:password@localhost:5432/ragdb
+POSTGRE_URL=        postgresql://<user:password>@localhost:5432/<your_local_rag_dbname>
 JWT_SECRET=         <run: openssl rand -hex 32>
 JWT_ALGORITHM=      HS256
 JWT_EXPIRE_MINUTES= 60

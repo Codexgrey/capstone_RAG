@@ -3,8 +3,12 @@ services/rag_service.py — RAG Query Orchestration
 
 Routes queries to the correct retrieval module (vector, keyword, or hybrid),
 builds the LLM prompt, generates the answer, and persists chat history.
+
+Special intent: queries asking to list ingested documents are intercepted
+before retrieval and answered directly from the PostgreSQL document registry.
 """
 
+import re
 import time
 import uuid
 from datetime import datetime
@@ -17,13 +21,48 @@ from app.generation.llm_client import generate_answer
 from app.generation.response_formatter import format_response
 
 
+# ── Document-list intent keywords ─────────────────────────────────────────────
+_LIST_PATTERNS = re.compile(
+    r"\b(list|show|what|which|how many|tell me).{0,30}"
+    r"(document|doc|file|paper|context|ingested|uploaded|available|in memory|you have)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_document_list_query(question: str) -> bool:
+    """Return True when the user is asking what documents are currently ingested."""
+    return bool(_LIST_PATTERNS.search(question))
+
+
+def _build_document_list_answer(db: Session, user_id) -> str:
+    """Build a human-readable list of all completed documents for this user."""
+    docs = (
+        db.query(Document)
+        .filter(Document.uploaded_by == user_id, Document.status == "completed")
+        .order_by(Document.upload_date.asc())
+        .all()
+    )
+    if not docs:
+        return (
+            "There are currently **no documents** ingested in the system. "
+            "Please upload a document using the sidebar to get started."
+        )
+
+    lines = [f"I currently have **{len(docs)} document(s)** in context:\n"]
+    for i, d in enumerate(docs, start=1):
+        dt = d.upload_date.strftime("%Y-%m-%d %H:%M UTC") if d.upload_date else "unknown"
+        lines.append(f"{i}. **{d.filename}** ({d.file_type.upper()}) — ingested {dt}")
+
+    return "\n".join(lines)
+
+
 def handle_query(
     db: Session,
     user_id,
     question: str,
     session_id: Optional[str] = None,
     retrieval_method: str = "vector",
-    top_k: int = 5,
+    top_k: int = 3,
     document_ids: list = None,
 ) -> dict:
 
@@ -36,32 +75,50 @@ def handle_query(
     _save_message(db=db, session_id=session.id, user_id=user_id,
                   role="user", content=question)
 
-    # 3 — Retrieve chunks via the requested method
+    # 3 — Short-circuit: document list intent
+    if _is_document_list_query(question):
+        answer = _build_document_list_answer(db, user_id)
+        latency_ms = (time.time() - start_time) * 1000
+        _save_message(db=db, session_id=session.id, user_id=user_id,
+                      role="assistant", content=answer,
+                      retrieval_method=None, source_chunk_ids="")
+        db.add(Log(
+            user_id=user_id, action="query_sent",
+            detail=f"question={question[:50]} method=system(doc_list) latency={round(latency_ms)}ms",
+            timestamp=datetime.utcnow()
+        ))
+        db.commit()
+        return format_response(
+            answer=answer, chunks=[], retrieval_method=None,
+            latency_ms=latency_ms, session_id=str(session.id), question=question,
+        )
+
+    # 4 — Retrieve chunks via the requested method
     chunks, actual_method = _dispatch_retrieval(
         retrieval_method, question, top_k, document_ids
     )
 
-    # 4 — Enrich with PostgreSQL source info
+    # 5 — Enrich with PostgreSQL source info
     chunks = _enrich_chunks_with_source(db, chunks)
 
-    # 5 — Build prompt and call LLM
+    # 6 — Build prompt and call LLM
     messages = build_chat_prompt(question=question, chunks=chunks)
     try:
-        answer = generate_answer(prompt=question, messages=messages)
+        answer = generate_answer(prompt=question, messages=messages, temperature=0.1)
     except Exception as e:
         answer = f"Error generating answer: {str(e)}"
 
-    # 6 — Calculate latency
+    # 7 — Calculate latency
     latency_ms = (time.time() - start_time) * 1000
 
-    # 7 — Save assistant message
+    # 8 — Save assistant message
     source_chunk_ids = ",".join([c.get("chunk_id", "") for c in chunks])
     _save_message(db=db, session_id=session.id, user_id=user_id,
                   role="assistant", content=answer,
                   retrieval_method=actual_method,
                   source_chunk_ids=source_chunk_ids)
 
-    # 8 — Log
+    # 9 — Log
     db.add(Log(
         user_id=user_id, action="query_sent",
         detail=(f"question={question[:50]} method={actual_method} "
@@ -70,33 +127,33 @@ def handle_query(
     ))
     db.commit()
 
-    # 9 — Return formatted response
+    # 10 — Return formatted response
     return format_response(
-        answer           = answer,
-        chunks           = chunks,
-        retrieval_method = actual_method,
-        latency_ms       = latency_ms,
-        session_id       = str(session.id),
-        question         = question,
+        answer=answer,
+        chunks=chunks,
+        retrieval_method=actual_method,
+        latency_ms=latency_ms,
+        session_id=str(session.id),
+        question=question,
     )
 
 
 # ── Retrieval dispatcher ──────────────────────────────────────────────────────
 
 def _dispatch_retrieval(method: str, question: str, top_k: int, document_ids: list):
-    """Route to the correct retrieval module. Falls back to postgres if all fail."""
+    """Route to the correct retrieval module. Falls back to ChromaDB if all fail."""
     if method == "vector":
         return _retrieve_vector(question, top_k, document_ids)
     elif method == "keyword":
-        return _retrieve_keyword(question, top_k)
+        return _retrieve_keyword(question, top_k, document_ids)
     elif method == "hybrid":
-        return _retrieve_hybrid(question, top_k)
+        return _retrieve_hybrid(question, top_k, document_ids)
     else:
-        return _fallback_postgres_chunks(top_k), "none"
+        return _retrieve_chroma_fallback(question, top_k, document_ids), "none"
 
 
 def _retrieve_vector(question: str, top_k: int, document_ids: list = None):
-    """Collins's FAISS vector retrieval, with ChromaDB then PostgreSQL fallback."""
+    """Collins's FAISS vector retrieval, with ChromaDB fallback."""
     try:
         from app.retrieval.vector_adapter import retrieve as collins_retrieve
         chunks = collins_retrieve(query=question, top_k=top_k)
@@ -109,74 +166,65 @@ def _retrieve_vector(question: str, top_k: int, document_ids: list = None):
     except Exception as e:
         print(f"  ⚠️  Vector retrieval error: {e} — trying ChromaDB")
 
-    try:
-        from app.ingestion.indexer import search_chunks
-        chunks = search_chunks(query=question, top_k=top_k, document_ids=document_ids)
-        if chunks:
-            print(f"  ✅ Vector (ChromaDB) — {len(chunks)} chunks")
-            return chunks, "vector"
-        print("  ⚠️  ChromaDB returned no results — falling back to PostgreSQL")
-    except Exception as e:
-        print(f"  ⚠️  ChromaDB failed: {e}")
-
-    return _fallback_postgres_chunks(top_k), "none"
+    chunks = _retrieve_chroma_fallback(question, top_k, document_ids)
+    if chunks:
+        print(f"  ✅ Vector (ChromaDB) — {len(chunks)} chunks")
+    return chunks, "vector"
 
 
-def _retrieve_keyword(question: str, top_k: int):
-    """Olivier's BM25 keyword retrieval, with PostgreSQL fallback."""
+def _retrieve_keyword(question: str, top_k: int, document_ids: list = None):
+    """Olivier's BM25 keyword retrieval, with ChromaDB fallback."""
     try:
         from app.retrieval.keyword_adapter import retrieve as olivier_retrieve
         chunks = olivier_retrieve(query=question, top_k=top_k)
         if chunks:
             print(f"  ✅ Keyword (BM25) — {len(chunks)} chunks")
             return chunks, "keyword"
-        print("  ⚠️  Keyword BM25 returned no results — falling back to PostgreSQL")
+        print("  ⚠️  Keyword BM25 returned no results — falling back to ChromaDB")
     except FileNotFoundError:
-        print("  ⚠️  No keyword index yet — upload documents first")
+        print("  ⚠️  No keyword index yet — falling back to ChromaDB")
     except Exception as e:
-        print(f"  ⚠️  Keyword retrieval error: {e}")
+        print(f"  ⚠️  Keyword retrieval error: {e} — falling back to ChromaDB")
 
-    return _fallback_postgres_chunks(top_k), "keyword"
+    # ChromaDB is always current (updated on every upload) — use it as fallback
+    chunks = _retrieve_chroma_fallback(question, top_k, document_ids)
+    if chunks:
+        print(f"  ✅ Keyword fallback (ChromaDB) — {len(chunks)} chunks")
+    return chunks, "keyword"
 
 
-def _retrieve_hybrid(question: str, top_k: int):
-    """Nathan's FAISS+BM25+RRF hybrid retrieval, with PostgreSQL fallback."""
+def _retrieve_hybrid(question: str, top_k: int, document_ids: list = None):
+    """Nathan's FAISS+BM25+RRF hybrid retrieval, with ChromaDB fallback."""
     try:
         from app.retrieval.hybrid_adapter import retrieve as nathan_retrieve
         chunks = nathan_retrieve(query=question, top_k=top_k)
         if chunks:
             print(f"  ✅ Hybrid (FAISS+BM25+RRF) — {len(chunks)} chunks")
             return chunks, "hybrid"
-        print("  ⚠️  Hybrid returned no results — falling back to PostgreSQL")
+        print("  ⚠️  Hybrid returned no results — falling back to ChromaDB")
     except FileNotFoundError:
-        print("  ⚠️  No hybrid index yet — upload documents first")
+        print("  ⚠️  No hybrid index yet — falling back to ChromaDB")
     except Exception as e:
-        print(f"  ⚠️  Hybrid retrieval error: {e}")
+        print(f"  ⚠️  Hybrid retrieval error: {e} — falling back to ChromaDB")
 
-    return _fallback_postgres_chunks(top_k), "hybrid"
+    chunks = _retrieve_chroma_fallback(question, top_k, document_ids)
+    if chunks:
+        print(f"  ✅ Hybrid fallback (ChromaDB) — {len(chunks)} chunks")
+    return chunks, "hybrid"
 
 
-def _fallback_postgres_chunks(top_k: int = 5):
-    """Last-resort: pull raw chunks from PostgreSQL (no semantic ranking)."""
-    from app.config.database import SessionLocal
-    from app.models.db_models import DocumentChunk
-    db = SessionLocal()
+def _retrieve_chroma_fallback(question: str, top_k: int = 3, document_ids: list = None):
+    """
+    ChromaDB semantic search — always current because every upload indexes here.
+    This is the universal fallback when FAISS/BM25 indexes are not ready yet.
+    """
     try:
-        raw = db.query(DocumentChunk).limit(top_k).all()
-        return [
-            {
-                "chunk_id":    c.chunk_id,
-                "document_id": c.document_id,
-                "source_name": c.source_name,
-                "text":        c.text,
-                "score":       1.0,
-                "rank":        i + 1,
-                "metadata":    {"page": c.page, "document_id": c.document_id}
-            }
-            for i, c in enumerate(raw)
-        ]
-    finally:
-        db.close()
+        from app.ingestion.indexer import search_chunks
+        chunks = search_chunks(query=question, top_k=top_k, document_ids=document_ids)
+        return chunks
+    except Exception as e:
+        print(f"  ⚠️  ChromaDB fallback failed: {e}")
+        return []
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

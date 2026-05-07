@@ -27,7 +27,7 @@ The backend calls two functions from `src/retrieval/vector_adapter.py`:
 from retrieval.vector_adapter import ingest, retrieve
 
 # After a user uploads a file:
-ingest(file_paths=["path/to/doc.pdf"], chunk_size=300, chunk_overlap=50)
+ingest(file_paths=["path/to/doc.pdf"], chunk_size=400, chunk_overlap=50)
 
 # On a query:
 result = retrieve(query="What is RAG?", top_k=5)

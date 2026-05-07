@@ -49,11 +49,12 @@ load_dotenv()
 GROQ_API_KEY         = os.environ.get('GROQ_API_KEY', 'YOUR_GROQ_API_KEY_HERE')
 GENERATOR_MODEL_NAME = 'llama-3.1-8b-instant'
 
-QUERY = """
-    What kind of neural network was used before transformers? 
-    Summarise how The dimensionality of these embeddings affects retrieval precision, 
-    while the chunk size impacts semantic coherence.
-"""
+QUERY = "explain retriever centric adaptation"
+#"""
+#     What kind of neural network was used before transformers? 
+#     Summarise how The dimensionality of these embeddings affects retrieval precision, 
+#     while the chunk size impacts semantic coherence.
+# """
 
 
 # ---------------------------------------------------------------------------

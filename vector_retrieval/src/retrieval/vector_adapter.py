@@ -1,5 +1,5 @@
 """
-src/retrieval/vector_adapter.py
+vector_retrieval/src/retrieval/vector_adapter.py
 Backend-facing adapter for the Vector Retrieval module.
 
 Exposes two clean functions:
@@ -121,7 +121,7 @@ def ingest(
             chunks = chunk_text_with_metadata(
                 text,
                 chunk_size     = chunk_size,
-                chunk_overlap  = chunk_overlap,
+                overlap        = chunk_overlap,
                 document_title = doc_title,
                 source         = metadata['file_name'],
                 document_id    = doc_id,

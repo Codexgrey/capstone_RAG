@@ -67,8 +67,10 @@ def _extract_pdf(path: Path) -> str:
 
     for i, page in enumerate(reader.pages, start=1):
         text = page.extract_text()
+        if text:
+            text = text.replace("\x00", "")   # strip NUL bytes — PostgreSQL rejects them
         if text and text.strip():
-            pages.append(f"[PAGE {i}]\n{text.strip()[:2000]}")
+            pages.append(f"[PAGE {i}]\n{text.strip()}")
 
     if not pages:
         print(f"  ⚠️  pypdf found no text — trying OCR for {path.name}")
@@ -107,8 +109,9 @@ def _extract_pdf_ocr(path: Path) -> list:
         pages = []
         for i, image in enumerate(images, start=1):
             text = pytesseract.image_to_string(image)
+            text = text.replace("\x00", "")   # strip NUL bytes
             if text.strip():
-                pages.append(f"[PAGE {i}]\n{text.strip()[:2000]}")
+                pages.append(f"[PAGE {i}]\n{text.strip()}")
 
         if not pages:
             print(f"  ⚠️  OCR found no text in {path.name}")
