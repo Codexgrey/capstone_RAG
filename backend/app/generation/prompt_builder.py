@@ -95,10 +95,12 @@ def build_chat_prompt(
     messages.append({
         "role": "system",
         "content": (
-            "You are assisting with a Retrieval-Augmented Generation System."
-            "Use only the retrieved context. Do not invent facts."
-            "If the answer is not in the context, say so clearly. "
-            "Always cite the source document and page number when possible."
+            f"""
+            You are assisting with a Retrieval-Augmented Generation System.
+            Use ONLY the retrieved context below. Do not invent facts. 
+            If the answer is not in the context, say so clearly.
+            Always cite the source document and page number when possible.
+            """
         )
     })
 
