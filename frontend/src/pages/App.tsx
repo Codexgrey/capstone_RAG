@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Toaster, toast } from "react-hot-toast";
 
 import Sidebar      from "../components/SideBar";
@@ -18,18 +18,22 @@ type User     = { username: string; password: string; role: "admin"|"user"; };
 type Citation = { chunk_id: string; source_name: string; page: number; section: string|null; };
 type Latency  = { retrieval: number; llm: number; };
 type Message  = { id?: string; role: "user"|"assistant"; content: string; created_at?: string; retrieval_method?: string|null; };
+type EvalMetrics = {
+  top_score?: number; avg_score?: number; source_coverage?: number;
+  chunks_retrieved?: number; precision_at_k?: number; mrr?: number; source_diversity?: number;
+};
 
 /* ══════════════════════════════════════════════════════════
    MAIN LAYOUT
 ══════════════════════════════════════════════════════════ */
 function MainLayout({ response, setResponse, citations, setCitations, latency, setLatency,
   onSend, onLogout, loading, currentUser, sessionId, setSessionId, method, setMethod,
-  menuOpen, setMenuOpen, showAdmin, setShowAdmin, theme, onThemeToggle, isAdmin, responseMethod }: any) {
+  menuOpen, setMenuOpen, showAdmin, setShowAdmin, theme, onThemeToggle, isAdmin, responseMethod,
+  evalMetrics, setEvalMetrics }: any) {
 
   const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
   const [refreshHistory,  setRefreshHistory]  = useState(0);
 
-  useEffect(() => { if (response) setHistoryMessages([]); }, [response]);
 
   const handleLoadSession = (sid: string, messages: Message[]) => {
     setSessionId(sid);
@@ -38,15 +42,16 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
   };
 
   const handleNewChat = () => {
-    setSessionId(null); setHistoryMessages([]);
-    setResponse(""); setCitations([]); setLatency({ retrieval: 0, llm: 0 });
+    setSessionId(null);
+    setHistoryMessages([]);
+    setResponse(""); setCitations([]); setLatency({ retrieval: 0, llm: 0 }); setEvalMetrics({});
     toast.success("New chat started");
   };
 
   const handleSend = async (query: string) => {
+    setHistoryMessages([]);          // clear history thread before sending
     await onSend(query);
     setRefreshHistory((n: number) => n + 1);
-    setHistoryMessages([]);
   };
 
   return (
@@ -90,7 +95,7 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
 
             {/* Sources — 1 col */}
             <div className="lg:col-span-1 min-w-0">
-              <SourcesPanel citations={citations} latency_ms={latency.retrieval} retrieval_method={responseMethod} />
+              <SourcesPanel citations={citations} latency_ms={latency.retrieval} retrieval_method={responseMethod} evaluation_metrics={evalMetrics} />
             </div>
 
           </div>
@@ -106,7 +111,7 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
 export default function App() {
   // ── Theme ──────────────────────────────────────────────
   const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem("rag-theme") as Theme) || "forest";
+    return (localStorage.getItem("rag-theme") as Theme) || "raglight";
   });
 
   useEffect(() => {
@@ -115,7 +120,7 @@ export default function App() {
   }, [theme]);
 
   const toggleTheme = () =>
-    setTheme(t => t === "forest" ? "raglight" : "forest");
+    setTheme(t => t === "raglight" ? "forest" : "raglight");
 
   // ── App state ───────────────────────────────────────────
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -128,6 +133,7 @@ export default function App() {
   const [showAdmin,  setShowAdmin]  = useState(false);
   const [loading,    setLoading]    = useState(false);
   const [responseMethod, setResponseMethod] = useState<string>("vector");
+  const [evalMetrics,    setEvalMetrics]    = useState<EvalMetrics>({});
 
   // ── Auth form ───────────────────────────────────────────
   const [authMode,  setAuthMode]  = useState<"login"|"register">("login");
@@ -185,6 +191,7 @@ export default function App() {
       setCitations(result.citations || []);
       setLatency({ retrieval: result.latency_ms, llm: 0 });
       setResponseMethod(result.retrieval_method || method);
+      setEvalMetrics(result.evaluation_metrics || {});
     } catch {
       setResponse("Error contacting backend.");
       toast.error("Failed to get a response — is the backend running?");
@@ -295,6 +302,8 @@ export default function App() {
         citations={citations}     setCitations={setCitations}
         latency={latency}         setLatency={setLatency}
         responseMethod={responseMethod}
+        evalMetrics={evalMetrics}
+        setEvalMetrics={setEvalMetrics}
         onSend={handleSend}       onLogout={handleLogout}
         loading={loading}         currentUser={currentUser}
         sessionId={sessionId}     setSessionId={setSessionId}

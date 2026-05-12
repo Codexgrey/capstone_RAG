@@ -1,5 +1,5 @@
 import React from "react";
-import { FileText, Clock, Zap, Database } from "lucide-react";
+import { FileText, Zap, Database, BarChart2, Info } from "lucide-react";
 
 interface Citation {
   chunk_id:        string;
@@ -10,26 +10,95 @@ interface Citation {
   section:         string | null;
 }
 
+interface EvaluationMetrics {
+  top_score?:        number;
+  avg_score?:        number;
+  source_coverage?:  number;
+  chunks_retrieved?: number;
+  precision_at_k?:   number;
+  mrr?:              number;
+  source_diversity?: number;
+}
+
 interface SourcesPanelProps {
-  citations:        Citation[];
-  latency_ms:       number;
-  retrieval_method?: string;
+  citations:           Citation[];
+  latency_ms:          number;
+  retrieval_method?:   string;
+  evaluation_metrics?: EvaluationMetrics;
 }
 
 const METHOD_LABELS: Record<string, { label: string; color: string }> = {
-  vector:  { label: "Vector (FAISS)",       color: "badge-primary"  },
-  keyword: { label: "Keyword (BM25)",       color: "badge-secondary"},
-  hybrid:  { label: "Hybrid (FAISS+BM25)",  color: "badge-accent"   },
-  none:    { label: "No retrieval",         color: "badge-ghost"    },
+  vector:  { label: "Vector (FAISS)",      color: "badge-primary"   },
+  keyword: { label: "Keyword (BM25)",      color: "badge-secondary" },
+  hybrid:  { label: "Hybrid (FAISS+BM25)", color: "badge-accent"    },
+  none:    { label: "No retrieval",        color: "badge-ghost"     },
 };
 
-const SourcesPanel: React.FC<SourcesPanelProps> = ({ citations, latency_ms, retrieval_method }) => {
-  const methodInfo = retrieval_method ? (METHOD_LABELS[retrieval_method] ?? { label: retrieval_method, color: "badge-ghost" }) : null;
+/* Mini progress bar — value 0–1 */
+function ScoreBar({ value }: { value: number }) {
+  const pct = Math.round(Math.min(Math.max(value, 0), 1) * 100);
+  const color =
+    pct >= 60 ? "bg-success" :
+    pct >= 35 ? "bg-warning" :
+                "bg-error";
+  return (
+    <div className="flex items-center gap-1.5 flex-1">
+      <div className="w-full bg-base-300 rounded-full h-1.5 overflow-hidden">
+        <div className={`h-1.5 rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs font-mono text-base-content/70 w-8 text-right">{pct}%</span>
+    </div>
+  );
+}
+
+/* Single metric row */
+function MetricRow({
+  label,
+  value,
+  showBar = false,
+  badge,
+  tooltip,
+}: {
+  label:     string;
+  value:     string | number;
+  showBar?:  boolean;
+  badge?:    string;
+  tooltip?:  string;
+}) {
+  return (
+    <div className="flex justify-between items-center gap-2" title={tooltip}>
+      <span className="text-base-content/60 text-xs flex items-center gap-1 shrink-0">
+        {label}
+        {tooltip && <Info className="size-2.5 opacity-40" />}
+      </span>
+      {showBar && typeof value === "number" ? (
+        <ScoreBar value={value} />
+      ) : badge ? (
+        <span className={`badge badge-sm ${badge}`}>{value}</span>
+      ) : (
+        <span className="badge badge-outline badge-sm font-mono">{value}</span>
+      )}
+    </div>
+  );
+}
+
+const SourcesPanel: React.FC<SourcesPanelProps> = ({
+  citations,
+  latency_ms,
+  retrieval_method,
+  evaluation_metrics,
+}) => {
+  const methodInfo = retrieval_method
+    ? (METHOD_LABELS[retrieval_method] ?? { label: retrieval_method, color: "badge-ghost" })
+    : null;
+
+  const em = evaluation_metrics;
+  const hasMetrics = em && (em.chunks_retrieved ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-4">
 
-      {/* Sources */}
+      {/* ── Sources ─────────────────────────────────────────────────────── */}
       <div className="card bg-base-100 border-t-4 border-[#00FF9D] hover:shadow-lg transition-all duration-200">
         <div className="card-body gap-3">
           <h3 className="text-xs uppercase tracking-widest text-base-content/60 font-semibold flex items-center gap-2">
@@ -72,27 +141,105 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({ citations, latency_ms, retr
         </div>
       </div>
 
-      {/* Performance */}
+      {/* ── Performance ──────────────────────────────────────────────────── */}
       <div className="card bg-base-100 border-t-4 border-[#00FF9D] hover:shadow-lg transition-all duration-200">
         <div className="card-body gap-3">
           <h3 className="text-xs uppercase tracking-widest text-base-content/60 font-semibold flex items-center gap-2">
             <Zap className="size-4" />
             Performance
           </h3>
+
           <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-              <span className="text-base-content/60 text-sm flex items-center gap-1">
-                <Clock className="size-3" /> Total latency
-              </span>
-              <span className="badge badge-outline">
-                {latency_ms > 0 ? `${latency_ms.toFixed(0)} ms` : "--"}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-base-content/60 text-sm">Guardrail</span>
-              <span className="badge badge-success badge-outline">active</span>
-            </div>
+            {/* Latency */}
+            <MetricRow
+              label="Total latency"
+              value={latency_ms > 0 ? `${latency_ms.toFixed(0)} ms` : "--"}
+              badge="badge-outline"
+              tooltip="End-to-end response time including retrieval + generation"
+            />
+
+            {/* Guardrail */}
+            <MetricRow
+              label="Guardrail"
+              value="active"
+              badge="badge-success badge-outline"
+              tooltip="Retrieval-constrained prompting active — LLM grounded to retrieved context only"
+            />
           </div>
+        </div>
+      </div>
+
+      {/* ── Evaluation Metrics ───────────────────────────────────────────── */}
+      <div className="card bg-base-100 border-t-4 border-[#00FF9D] hover:shadow-lg transition-all duration-200">
+        <div className="card-body gap-3">
+          <h3 className="text-xs uppercase tracking-widest text-base-content/60 font-semibold flex items-center gap-2">
+            <BarChart2 className="size-4" />
+            Evaluation Metrics
+          </h3>
+
+          {!hasMetrics ? (
+            <p className="text-base-content/40 text-xs italic">
+              Ask a question to compute retrieval metrics.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+
+              {/* Top score */}
+              <div className="flex items-center gap-2" title="Similarity/relevance score of the best-ranked retrieved chunk">
+                <span className="text-base-content/60 text-xs shrink-0 flex items-center gap-1">
+                  Top Score <Info className="size-2.5 opacity-40" />
+                </span>
+                <ScoreBar value={em!.top_score ?? 0} />
+              </div>
+
+              {/* Avg score */}
+              <div className="flex items-center gap-2" title="Mean Similarity/relevance score across all retrieved chunks">
+                <span className="text-base-content/60 text-xs shrink-0 flex items-center gap-1">
+                  Avg Score <Info className="size-2.5 opacity-40" />
+                </span>
+                <ScoreBar value={em!.avg_score ?? 0} />
+              </div>
+
+              {/* Precision@k */}
+              <div className="flex items-center gap-2" title="Fraction of retrieved chunks scoring ≥ 0.40 (relevance proxy)">
+                <span className="text-base-content/60 text-xs shrink-0 flex items-center gap-1">
+                  Precision@k <Info className="size-2.5 opacity-40" />
+                </span>
+                <ScoreBar value={em!.precision_at_k ?? 0} />
+              </div>
+
+              {/* MRR */}
+              <div className="flex items-center gap-2" title="Mean Reciprocal Rank — how early the first relevant chunk appears">
+                <span className="text-base-content/60 text-xs shrink-0 flex items-center gap-1">
+                  MRR <Info className="size-2.5 opacity-40" />
+                </span>
+                <ScoreBar value={em!.mrr ?? 0} />
+              </div>
+
+              {/* Source diversity */}
+              <div className="flex items-center gap-2" title="Fraction of retrieved chunks from distinct source documents">
+                <span className="text-base-content/60 text-xs shrink-0 flex items-center gap-1">
+                  Src Diversity <Info className="size-2.5 opacity-40" />
+                </span>
+                <ScoreBar value={em!.source_diversity ?? 0} />
+              </div>
+
+              <div className="divider my-0.5" />
+
+              {/* Counts */}
+              <MetricRow
+                label="Chunks retrieved"
+                value={em!.chunks_retrieved ?? "--"}
+                tooltip="Number of top-k chunks returned by the retriever"
+              />
+              <MetricRow
+                label="Unique sources"
+                value={em!.source_coverage ?? "--"}
+                tooltip="Number of distinct documents represented in top-k results"
+              />
+
+            </div>
+          )}
         </div>
       </div>
 
