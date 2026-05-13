@@ -41,17 +41,33 @@ def build_prompt(question: str, chunks: List[Dict[str, Any]]) -> str:
     context = "\n\n".join(context_parts)
 
     # final prompt that instructs llm to use context
-    prompt = f"""You are a helpful assistant. Answer the question below using ONLY the provided context.
-If the answer is not in the context, say "I could not find an answer in the provided documents."
-Do not make up information. Keep your answer concise and accurate.
+    prompt = f"""
+     You are assisting with a Retrieval-Augmented Generation System.
+    Use only the retrieved context below. Do not invent facts.
 
-CONTEXT:
-{context}
+    Return your answer in exactly this format:
+    Answer:
+    <as many sentences as needed to answer the question, but be concise and use only the retrieved context>
+    <space before producing "Evidence Used" for visual hierarchy>
 
-QUESTION:
-{question}
+    Evidence Used:
+    bullet list with proper spacing between bullets for good visibility
+    - <bullet with chunk id and what it contributed>
+    - <bullet with chunk id and what it contributed>
+    - <bullet with chunk id and what it contributed>
+    <space before producing "Citations" for visual hierarchy>
 
-ANSWER:"""
+    Citations:
+    <comma-separated citations>
+
+    CONTEXT:
+    {context}
+
+    QUESTION:
+    {question}
+
+    Now produce the final response.
+    """
 
     return prompt
 
@@ -79,10 +95,12 @@ def build_chat_prompt(
     messages.append({
         "role": "system",
         "content": (
-            "You are a helpful assistant for a RAG system. "
-            "Answer questions using ONLY the provided context. "
-            "If the answer is not in the context, say so clearly. "
-            "Always cite the source document and page number when possible."
+            f"""
+            You are assisting with a Retrieval-Augmented Generation System.
+            Use ONLY the retrieved context below. Do not invent facts. 
+            If the answer is not in the context, say so clearly.
+            Always cite the source document and page number when possible.
+            """
         )
     })
 
@@ -120,11 +138,14 @@ def build_chat_prompt(
 
 def _build_no_context_prompt(question: str) -> str:
     """Fallback prompt when no chunks are retrieved."""
-    return f"""You are a helpful assistant.
-No relevant context was found in the uploaded documents for this question.
-Please let the user know and suggest they upload relevant documents.
+    return f"""
+    You are a helpful assistant.
+    No relevant context was found in the uploaded documents for this question.
+    Please let the user know and suggest they upload relevant documents.
 
-QUESTION:
-{question}
+    QUESTION:
+    {question}
 
-ANSWER:"""
+    ANSWER:
+"""
+

@@ -1,123 +1,69 @@
-# Keyword Retrieval (BM25 + Inverted Index) 
+# Keyword Retrieval — BM25 Search
 
-Keyword-based retrieval module of the `Capstone_RAG` project. Given a user
-query, the system:
+Olivier's keyword retrieval module. Uses BM25Okapi for lexical search
+with multi-language support via NLTK.
 
-1. Ingests a document (PDF / Word / TXT / web page — TXT implemented, others
-   extendable in `src/utils/loader.py`).
-2. Detects the document language (English, French, Turkish, German, Spanish,
-   Italian, Portuguese, Arabic, ...).
-3. Cleans, chunks (300–500 word blocks with overlap), and tokenises the text
-   (lowercase → stopword removal → stemming).
-4. Builds a positional inverted index and a BM25 store over the same tokens.
-5. Normalises the user query with a small LLM, then BM25-ranks the inverted
-   index to return the top-K chunks.
-6. Builds a grounded prompt and asks a larger LLM (Groq) to answer using
-   **only** that context.
-
-Pipeline diagram:
-
-```
-Document → Loader → Cleaner → Chunker → Tokenizer → Inverted Index (BM25)
-→ Query → Query Normaliser (LLM) → BM25 Ranker → Retriever
-→ Prompt Builder → Generator → Final Response
-```
-
-## Folder Structure
-
-```
-keyword_retrieval/
-│
-├── src/
-│   ├── models/            # LLM wrappers (query normaliser + generator)
-│   │   └── keyword_model.py
-│   │
-│   ├── preprocessing/     # Language detection, cleaning, tokenisation
-│   │   └── preprocess.py
-│   │
-│   ├── indexing/          # Inverted index + BM25 store
-│   │   ├── indexer.py
-│   │   └── bm25_store.py
-│   │
-│   ├── retrieval/         # BM25 ranking + top-K retrieval
-│   │   └── retriever.py
-│   │
-│   ├── evaluation/        # Precision@k, Recall@k, MRR
-│   │   └── evaluate.py
-│   │
-│   ├── utils/             # Loader, chunker, prompt builder
-│   │   ├── loader.py
-│   │   ├── chunker.py
-│   │   └── prompts.py
-│   │
-│   └── main.py            # Local entry point (argparse)
-│
-├── tests/
-│   └── test_pipeline.py   # Offline unit tests (no API key required)
-│
-├── data/
-│   └── sample.txt         # Example document for manual testing
-│
-├── keyword_retrieval.ipynb  # Interactive pipeline notebook (MVP)
-├── requirements.txt
-└── README.md
-```
-
-## Quick Start
+## Setup
 
 ```bash
-# 1. Install deps
+cd keyword_retrieval
 pip install -r requirements.txt
-
-# 2. Set the Groq API key
-export GROQ_API_KEY='your-groq-key-here'
-
-# 3. Run the full pipeline from the CLI
-python -m src.main --doc data/sample.txt \
-    --query "How does the inverted index work in keyword search systems?"
-
-# 4. Or run the interactive notebook
-jupyter notebook keyword_retrieval.ipynb
 ```
 
-## Notebook Overview (`keyword_retrieval.ipynb`)
+Download NLTK data on first run (automatic) or manually:
+```python
+import nltk
+nltk.download('stopwords')
+nltk.download('punkt')
+```
 
-The notebook mirrors every stage of the pipeline so each can be tested,
-debugged, and understood before being moved into production:
-
-1.  Environment Setup
-2.  Test Document Setup
-3.  Loader (`utils/loader.py`)
-4.  Language Detection (`preprocessing/preprocess.py`)
-5.  Text Cleaning (`preprocessing/preprocess.py`)
-6.  Chunker (`utils/chunker.py`)
-7.  Tokenizer (`preprocessing/preprocess.py`)
-8.  Build Inverted Index (`indexing/indexer.py` + `indexing/bm25_store.py`) **← heart of the system**
-9.  Index Inspection
-10. Query Normaliser — small LLM (`models/keyword_model.py`)
-11. BM25 Ranking + Retriever (`retrieval/retriever.py`)
-12. Retrieval Debug View
-13. Prompt Builder (`utils/prompts.py`)
-14. Generator (Groq API)
-15. End-to-End Pipeline Test
-16. Summary
-
-## Tests
+## Run Standalone (Research / Testing)
 
 ```bash
-python -m unittest tests.test_pipeline
+cd keyword_retrieval/src
+python main.py
 ```
 
-The offline tests do not call the Groq API and validate chunking,
-tokenisation, inverted-index construction, BM25 retrieval, and language
-detection.
+Interactive menu drives the full 10-step pipeline.
 
-## Notes
+## Backend Integration
 
-* The inverted index stores term frequency, document frequency, and token
-  positions. Positional data enables phrase search (e.g. "New York" instead
-  of just "New" and "York") on top of the boolean / BM25 lookups.
-* BM25 scoring accounts for term frequency, rarity, and chunk length.
-* Language detection is automatic — stopwords adapt per document language.
-* The generator is instructed to reply with `"I don't have enough
-  information."` when the retrieved context does not support the answer.
+The backend calls two functions from `src/retrieval/keyword_adapter.py`:
+
+```python
+# Loaded by backend's module_loader dynamically
+ingest(file_paths=["path/to/doc.pdf"], chunk_size=300, chunk_overlap=50)
+result = retrieve(query="What is RAG?", top_k=5)
+```
+
+Persists index to: `keyword_bm25.pkl`, `keyword_index.pkl`, `keyword_chunks.pkl`
+(in the `keyword_retrieval/` directory when called from the backend).
+
+## Pipeline
+
+```
+Document → Loader → Cleaner → Language detection → Chunker →
+Tokeniser (NLTK stemming/stopwords) → Inverted Index + BM25 → Retriever
+```
+
+## Structure
+
+```
+src/
+├── models/         keyword_model.py      — BM25Okapi wrapper
+├── preprocessing/  preprocess.py         — clean, detect language, tokenise
+├── indexing/       indexer.py            — build pipeline + inverted index
+│                   bm25_store.py         — build/save/load BM25 model
+├── retrieval/      retriever.py          — BM25 search + matched_terms
+│                   keyword_adapter.py    — backend plug-in interface
+├── evaluation/     evaluate.py           — precision@k, recall@k, MRR
+└── utils/          chunker.py, loader.py, prompts.py
+```
+
+## Environment Variables (optional overrides)
+
+| Variable               | Default               |
+|------------------------|-----------------------|
+| `KEYWORD_BM25_PATH`    | `keyword_bm25.pkl`    |
+| `KEYWORD_INDEX_PATH`   | `keyword_index.pkl`   |
+| `KEYWORD_CHUNKS_PATH`  | `keyword_chunks.pkl`  |

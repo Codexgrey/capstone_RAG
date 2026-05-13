@@ -26,6 +26,7 @@ from config import (
 # PIPELINE STATE
 # =============================================================================
 
+<<<<<<< HEAD
 state = {
     "text":              None,
     "source":            None,
@@ -45,6 +46,25 @@ state = {
     "prompt":            None,
     "answer":            None,
 }
+=======
+DOCUMENT_FOLDER      = 'tests'          # folder scanned for documents
+CHUNK_SIZE           = 300
+CHUNK_OVERLAP        = 50
+TOP_K                = 3
+
+REBUILD_INDEX        = True             # set False to reload a saved index instead
+
+load_dotenv()
+GROQ_API_KEY         = os.environ.get('GROQ_API_KEY', 'YOUR_GROQ_API_KEY_HERE')
+GENERATOR_MODEL_NAME = 'llama-3.1-8b-instant'
+
+QUERY = "explain retriever centric adaptation"
+#"""
+#     What kind of neural network was used before transformers? 
+#     Summarise how The dimensionality of these embeddings affects retrieval precision, 
+#     while the chunk size impacts semantic coherence.
+# """
+>>>>>>> 590d3f8e04a0690da0694a94c69bb26a5835d1dd
 
 
 # =============================================================================

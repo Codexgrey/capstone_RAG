@@ -1,80 +1,62 @@
 """
 ingestion/parser.py — Document Text Extraction
-================================================
+
 Extracts plain text from uploaded files.
+Supported formats: .txt, .md, .pdf, .docx
 
-Supported formats:
-    .txt  → read directly
-    .pdf  → extract with pypdf
-    .docx → extract with python-docx (added for future use)
-    .md   → read directly
-
-Used by:
-    app/api/upload.py (Step 7) after saving the file to disk.
-    Output is passed directly to chunker.py (Step 6).
-
-Usage:
-    from app.ingestion.parser import extract_text
-    text = extract_text("/storage/documents/user123/report.pdf", "pdf")
+PDF extraction strategy:
+  1. pypdf  — fast, works for text-based PDFs
+  2. OCR    — fallback for scanned/image PDFs (requires tesseract + poppler)
 """
 
+import os
 from pathlib import Path
 
 
 def extract_text(filepath: str, file_type: str) -> str:
-    """
-    Extract plain text from a document file.
-
-    Args:
-        filepath:  Absolute path to the saved file on disk.
-        file_type: File extension without dot — "pdf", "txt", "md", "docx"
-
-    Returns:
-        Extracted text as a single string.
-
-    Raises:
-        ValueError: If the file type is not supported.
-        FileNotFoundError: If the file does not exist at the given path.
-    """
     path = Path(filepath)
-
     if not path.exists():
         raise FileNotFoundError(f"File not found: {filepath}")
 
-    file_type = file_type.lower().strip(".")
+    ft = file_type.lower().strip(".")
 
-    if file_type in ("txt", "md"):
+    if ft in ("txt", "md"):
         return _extract_txt(path)
-
-    elif file_type == "pdf":
+    elif ft == "pdf":
         return _extract_pdf(path)
-
-    elif file_type == "docx":
+    elif ft == "docx":
         return _extract_docx(path)
-
     else:
         raise ValueError(
-            f"Unsupported file type: '{file_type}'. "
-            f"Supported: txt, md, pdf, docx"
+            f"Unsupported file type: '{ft}'. Supported: txt, md, pdf, docx"
         )
 
 
-# ── Extractors ─────────────────────────────────────────────────────────────────
+def get_file_type(filename: str) -> str:
+    suffix = Path(filename).suffix.lower().strip(".")
+    if not suffix:
+        raise ValueError(f"Cannot determine file type: {filename}")
+    supported = {"pdf", "txt", "md", "docx"}
+    if suffix not in supported:
+        raise ValueError(
+            f"Unsupported file type: '.{suffix}'. Supported: {', '.join(sorted(supported))}"
+        )
+    return suffix
+
+
+# ── Extractors ────────────────────────────────────────────────────────────────
 
 def _extract_txt(path: Path) -> str:
-    """Read plain text or markdown file."""
-    try:
-        return path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        # Fallback for files with different encoding
+    for enc in ("utf-8", "latin-1"):
         try:
-            return path.read_text(encoding="latin-1")
+            return path.read_text(encoding=enc)
         except UnicodeDecodeError:
-            return path.read_text(encoding="utf-8", errors="ignore")
+            continue
+    return path.read_text(encoding="utf-8", errors="ignore")
 
 
 def _extract_pdf(path: Path) -> str:
-    """Extract text from PDF — tries pypdf first, falls back to OCR for scanned PDFs."""
+    """pypdf first; OCR fallback for scanned PDFs."""
     try:
         from pypdf import PdfReader
     except ImportError:
@@ -83,98 +65,72 @@ def _extract_pdf(path: Path) -> str:
     reader = PdfReader(str(path))
     pages  = []
 
-    for page_num, page in enumerate(reader.pages, start=1):
-        page_text = page.extract_text()
-        if page_text and page_text.strip():
-            pages.append(f"[PAGE {page_num}]\n{page_text[:1000]}")
+    for i, page in enumerate(reader.pages, start=1):
+        text = page.extract_text()
+        if text:
+            text = text.replace("\x00", "")   # strip NUL bytes — PostgreSQL rejects them
+        if text and text.strip():
+            pages.append(f"[PAGE {i}]\n{text.strip()}")
 
-    # If pypdf got nothing — PDF is likely scanned (image-based)
     if not pages:
         print(f"  ⚠️  pypdf found no text — trying OCR for {path.name}")
         pages = _extract_pdf_ocr(path)
 
     if not pages:
         raise ValueError(
-            f"No text could be extracted from: {path.name}. "
-            f"The PDF may be password protected or corrupted."
+            f"No text extracted from: {path.name}. "
+            "PDF may be password-protected or image-only."
         )
 
     return "\n\n".join(pages)
 
 
 def _extract_pdf_ocr(path: Path) -> list:
+    """OCR fallback using pdf2image + pytesseract. Cross-platform."""
     try:
         from pdf2image import convert_from_path
         import pytesseract
-        import os
 
-        # Tesseract path
-        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        # Let pytesseract find tesseract automatically (works on Linux/Mac).
+        # On Windows, set TESSERACT_CMD env var to the tesseract.exe path.
+        tesseract_cmd = os.environ.get("TESSERACT_CMD", "")
+        if tesseract_cmd:
+            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
 
-        # Poppler path — your exact install location
-        POPPLER_PATH = r"C:\Program Files\Release-25.12.0-0\poppler-25.12.0\Library\bin"
+        # On Windows, set POPPLER_PATH env var to the poppler bin directory.
+        poppler_path = os.environ.get("POPPLER_PATH", None)
 
-        images = convert_from_path(
-            str(path),
-            dpi=150,
-            poppler_path=POPPLER_PATH
-        )
+        kwargs = {"dpi": 150}
+        if poppler_path:
+            kwargs["poppler_path"] = poppler_path
+
+        images = convert_from_path(str(path), **kwargs)
 
         pages = []
         for i, image in enumerate(images, start=1):
             text = pytesseract.image_to_string(image)
+            text = text.replace("\x00", "")   # strip NUL bytes
             if text.strip():
-                pages.append(f"[PAGE {i}]\n{text[:1000]}")
+                pages.append(f"[PAGE {i}]\n{text.strip()}")
 
         if not pages:
             print(f"  ⚠️  OCR found no text in {path.name}")
-
         return pages
 
     except ImportError:
-        print("  ⚠️  OCR not available — install: pip install pdf2image pytesseract")
+        print("  ⚠️  OCR unavailable — install: pip install pdf2image pytesseract")
         return []
     except Exception as e:
         print(f"  ⚠️  OCR failed: {e}")
         return []
+
+
 def _extract_docx(path: Path) -> str:
-    """Extract text from Word document using python-docx."""
     try:
         from docx import Document
     except ImportError:
-        raise ImportError(
-            "python-docx is required for DOCX parsing. "
-            "Run: pip install python-docx"
-        )
+        raise ImportError("Run: pip install python-docx")
 
     doc = Document(str(path))
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
     return "\n\n".join(paragraphs)
-
-
-def get_file_type(filename: str) -> str:
-    """
-    Extract the file extension from a filename.
-
-    Args:
-        filename: e.g. "report.pdf" or "notes.txt"
-
-    Returns:
-        Lowercase extension without dot: "pdf", "txt", "docx", "md"
-
-    Raises:
-        ValueError: If the file has no extension or unsupported type.
-    """
-    suffix = Path(filename).suffix.lower().strip(".")
-
-    if not suffix:
-        raise ValueError(f"Cannot determine file type from filename: {filename}")
-
-    supported = {"pdf", "txt", "md", "docx"}
-    if suffix not in supported:
-        raise ValueError(
-            f"Unsupported file type: '.{suffix}'. "
-            f"Supported: {', '.join(sorted(supported))}"
-        )
-
-    return suffix

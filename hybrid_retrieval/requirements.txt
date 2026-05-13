@@ -1,0 +1,17 @@
+groq
+sentence-transformers
+faiss-cpu
+matplotlib
+huggingface_hub
+pypdf
+python-docx
+numpy
+rank-bm25
+nltk
+langdetect
+python-dotenv
+scikit-learn
+tqdm
+requests
+pdf2image>=1.16.0
+pytesseract>=0.3.10

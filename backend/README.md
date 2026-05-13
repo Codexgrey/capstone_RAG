@@ -1,64 +1,78 @@
-# Capstone RAG Backend
-This is the backend for Retrieval-Augmented Generation system for intelligent document Q & A.
-Will try to keep it updated as i update the files for better usability
+# Backend — FastAPI RAG Orchestration
+
+Khalid's FastAPI backend. Handles document ingestion, query routing,
+LLM answer generation, and chat history persistence.
 
 ## Setup
 
-### Virtual Environment
-
 ```bash
-python3 -m venv venv
-source venv/bin/activate   # Linux/macOS
-venv\Scripts\activate      # Windows
-```
-### Instal Dependencies
+cd backend
 pip install -r requirements.txt
+```
 
-### Environment Variables
-Create a .env file in backend/:
-
-DATABASE_URL=postgresql://postgres:<password>@localhost:5432/ragdb
-# JWT secret key (must NOT be left as default)
-# Generate a secure random key:
-# In Ubuntu terminal (prefered) type:  openssl rand -hex 32
-JWT_SECRET=<paste-generated-key>
-
-# Token settings
+Create `backend/.env`:
+```env
+POSTGRE_URL=postgresql://user:password@localhost:5432/ragdb
+JWT_SECRET=<run: openssl rand -hex 32>
 JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-## Database
-
-### Create the database in PostgreSQL
-```bash
-sudo -u postgres psql
-``` 
-inside psql:
-```Sql
-    CREATE DATABASE ragdb;
+JWT_EXPIRE_MINUTES=60
+STORAGE_PATH=./storage/documents
+CHROMA_PERSIST_DIR=./chroma_storage
+LLM_BACKEND=groq
+GROQ_API_KEY=your_groq_api_key_here
+RAG_PROJECT_ROOT=/absolute/path/to/capstone_RAG
 ```
 
-## Run App
+## Run
+
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8000
 ```
 
-## Test
-http://localhost:8000/ -> {"message":"Backend Running"}
-http://localhost:8000/db_test -> shows PostgreSQL version
+API docs: http://localhost:8000/docs
 
-## LLM Backends
+## Default Admin
 
-Right now we’re sticking with **Groq** (fast + free).  
-OpenAI and Anthropic are supported too, but they need API keys — we’ll add those later if needed.
+On first startup, the backend auto-creates:
+- Email: `admin@admin.com`
+- Password: `admin1234`
 
-### Groq Setup
-1. Grab a free API key here → https://console.groq.com  
-2. Add this to your `.env`:
-GROQ_API_KEY=your_key_here LLM_BACKEND=groq
-3. Install the package:
-```bash
-pip install groq
+## Key Endpoints
+
+| Method | Path                        | Description                  |
+|--------|-----------------------------|------------------------------|
+| POST   | `/api/auth/register`        | Register new user            |
+| POST   | `/api/auth/login`           | Login, get JWT token         |
+| POST   | `/api/upload`               | Upload + ingest document     |
+| GET    | `/api/documents`            | List user's documents        |
+| POST   | `/api/query`                | Ask a question               |
+| POST   | `/api/chat/sessions`        | Create chat session          |
+| GET    | `/api/chat/sessions`        | List chat sessions           |
+| GET    | `/api/chat/sessions/{id}`   | Get session messages         |
+
+## Retrieval Routing
+
+`POST /api/query` body:
+```json
+{
+  "question": "What is RAG?",
+  "retrieval_method": "vector",   // "vector" | "keyword" | "hybrid"
+  "top_k": 5,
+  "session_id": null
+}
 ```
-That’s it Groq should run right away.
-If you don’t set up any backend, the system just stays in placeholder mode (hardcoded replies).
+
+The backend routes to the correct module adapter in `app/retrieval/`.
+
+## Structure
+
+```
+backend/app/
+├── api/          # HTTP endpoints (upload, query, auth)
+├── config/       # Settings, database, dependencies
+├── generation/   # LLM prompt builder, client, formatter
+├── ingestion/    # Parser, chunker, ChromaDB indexer
+├── models/       # SQLAlchemy models + Pydantic schemas
+├── retrieval/    # Adapters bridging to retrieval modules
+└── services/     # RAG orchestration (rag_service.py)
+```

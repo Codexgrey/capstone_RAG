@@ -19,7 +19,7 @@ class RetrievalMethod(str, Enum):
    # Maps directly to the three modules.
     vector  = "vector"    
     keyword = "keyword"   
-    clara = "clara"     
+    hybrid = "hybrid"
     none = "none"  # default for now until it's connected
 
 class UserRegisterRequest(BaseModel):
@@ -121,7 +121,7 @@ class RetrievalResult(BaseModel):
     score meaning differs per module:
       vector : cosine similarity  
       keyword: BM25 score         
-      clara  : method-specific    
+      hybrid : method-specific (FAISS+BM25+RRF)    
     """
     chunk_id: str
     document_id: str
@@ -218,14 +218,14 @@ class QueryRequest(BaseModel):
     {
         "question": "What is RAG?",
         "session_id": "uuid..."        ← optional, auto-created if missing
-        "retrieval_method": "vector"   ← optional, defaults to "none" until connected
+            "retrieval_method": "vector",   // optional: "vector" | "keyword" | "hybrid"
         "top_k": 5                     ← optional
         "document_ids": ["doc1"]       ← optional, filter to specific docs
     }
     """
     question: str = Field(..., min_length=1)
     session_id: Optional[UUID]  = None
-    retrieval_method: Optional[RetrievalMethod] = RetrievalMethod.none
+    retrieval_method: Optional[RetrievalMethod] = RetrievalMethod.vector
     top_k: int = Field(default=5, ge=1, le=20)
     document_ids: Optional[List[str]] = None
 
@@ -234,7 +234,7 @@ class CitationSchema(BaseModel):
     One citation in the final answer.
     Mirrors team's answer_response schema citation object.
     {
-        "chunk_id": "doc1_chunk_0004",
+        "chunk_id": "doc-001-chunk-4",
         "source_name": "report.pdf",
         "page": 7,
         "section": "Risk Analysis"
@@ -253,7 +253,7 @@ class QueryResponse(BaseModel):
         "answer": "RAG stands for Retrieval-Augmented Generation...",
         "citations": [
             {
-                "chunk_id": "doc1_chunk_0004",
+                "chunk_id": "doc-001-chunk-4",
                 "source_name": "report.pdf",
                 "page": 7,
                 "section": "Risk Analysis"

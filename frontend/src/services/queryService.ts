@@ -5,7 +5,7 @@ export const sendQuery = async (
   sessionId?: string,
   retrievalMethod: string = 'vector'
 ) => {
-  const res = await apiClient.post('/query', {
+  const res = await apiClient.post('/api/query', {
     question,
     session_id:       sessionId || null,
     retrieval_method: retrievalMethod,
@@ -15,10 +15,21 @@ export const sendQuery = async (
 };
 
 export const getSessions = async () => {
-  const res = await apiClient.get('/chat/sessions');
+  const res = await apiClient.get('/api/chat/sessions');
   return res.data;
 };
+
 export const getSessionMessages = async (sessionId: string) => {
-  const res = await apiClient.get(`/chat/sessions/${sessionId}`);
+  const res = await apiClient.get(`/api/chat/sessions/${sessionId}`);
+  return res.data;
+};
+
+export const renameSession = async (id: string, title: string) => {
+  const res = await apiClient.patch(`/api/chat/sessions/${id}`, { title });
+  return res.data;
+};
+
+export const deleteSession = async (id: string) => {
+  const res = await apiClient.delete(`/api/chat/sessions/${id}`);
   return res.data;
 };

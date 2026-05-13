@@ -22,7 +22,7 @@
     "method": {
       "type": "string",
       "description": "Retrieval method to use. Determines which adapter is called in backend/app/retrieval/.",
-      "enum": ["vector", "keyword", "clara"],
+      "enum": ["vector", "keyword", "hybrid"],
       "example": "vector"
     },
     "filters": {

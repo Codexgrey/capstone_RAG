@@ -113,7 +113,7 @@ class ChatMessage(Base):
     WHO asked : user_id (FK: users.id)
     WHAT asked: content (role='user')
     ANSWER : content (role='assistant')
-    HOW answered : retrieval_method (vector | keyword | clara — filled in Step 9)
+    HOW answered : retrieval_method (vector | keyword | hybrid — filled in Step 9)
     WHAT CITED: source_chunk_ids (comma-separated chunk_ids)
     """
     __tablename__ = "chat_messages"
@@ -129,7 +129,7 @@ class ChatMessage(Base):
 
     # Filled in once retrieval modules connect, for now i just put the default to none
     retrieval_method = Column(
-        SAEnum("vector", "keyword", "clara", "none", name="retrieval_method_enum"),
+        SAEnum("vector", "keyword", "hybrid", "none", name="retrieval_method_enum"),
         nullable=True, default=None
     )
     source_chunk_ids = Column(Text, nullable=True,
