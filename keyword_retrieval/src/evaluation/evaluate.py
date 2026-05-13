@@ -14,9 +14,8 @@ Metrics implemented
 import math
 
 
-# ---------------------------------------------------------------------------
 # Core metrics
-# ---------------------------------------------------------------------------
+
 
 def precision_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float:
     """Precision@K — what fraction of the top-K results are relevant?"""
@@ -43,7 +42,7 @@ def reciprocal_rank(retrieved_ids: list[str], relevant_ids: set[str]) -> float:
 
 
 def ndcg_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float:
-    """NDCG@K (binary relevance)."""
+    """NDCG@K (binary relevance)"""
     dcg  = sum(
         1.0 / math.log2(rank + 1)
         for rank, cid in enumerate(retrieved_ids[:k], start=1)
@@ -56,9 +55,8 @@ def ndcg_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float
     return dcg / idcg if idcg else 0.0
 
 
-# ---------------------------------------------------------------------------
 # Batch evaluation
-# ---------------------------------------------------------------------------
+
 
 def evaluate(
     results:      list[dict],

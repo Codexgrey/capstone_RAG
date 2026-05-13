@@ -1,7 +1,7 @@
 """
-indexing/bm25_store.py
+indexing
 =======================
-Build, save, and load the BM25 scoring model.
+Build, save and load the BM25 scoring model.
 Also exposes load_bm25() for the adapter to load all three
 persisted objects (BM25 model, inverted index, chunk records) at once.
 """
@@ -12,9 +12,8 @@ from pathlib import Path
 from rank_bm25 import BM25Okapi
 
 
-# =============================================================================
 # BUILD BM25 MODEL
-# =============================================================================
+
 
 def build_bm25(tokenized_chunks: list[list[str]]) -> BM25Okapi:
     """
@@ -35,9 +34,8 @@ def build_bm25(tokenized_chunks: list[list[str]]) -> BM25Okapi:
     return bm25
 
 
-# =============================================================================
 # SAVE AND LOAD — single-object helpers (used internally)
-# =============================================================================
+
 
 def save_bm25(bm25: BM25Okapi, path: str | Path) -> None:
     """Save the BM25 model to disk."""
@@ -48,9 +46,8 @@ def save_bm25(bm25: BM25Okapi, path: str | Path) -> None:
     print(f"  [BM25] Model saved to: {path}")
 
 
-# =============================================================================
 # LOAD ALL — called by keyword_adapter._load_state()
-# =============================================================================
+
 
 def load_bm25(
     bm25_path:   str | Path,

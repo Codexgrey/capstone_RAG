@@ -14,7 +14,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()  
-GROQ_API_KEY      = os.environ.get("GROQ_API_KEY", "your_groq_api_key_here")
+GROQ_API_KEY      = os.environ.get("GROQ_API_KEY", "YOUR_GROQ_API_KEY_HERE")
 
 # Model used to extract keywords from the user query (Step 7)
 QUERY_MODEL_NAME  = "llama-3.1-8b-instant"

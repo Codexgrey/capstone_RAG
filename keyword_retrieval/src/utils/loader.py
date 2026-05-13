@@ -31,10 +31,8 @@ from pathlib import Path
 
 from config import STORAGE_DIR as _STORAGE_DIR
 
-
-# =============================================================================
 # STORAGE FOLDER  (configured in config.py)
-# =============================================================================
+
 
 STORAGE_FOLDER = Path(_STORAGE_DIR)
 
@@ -58,10 +56,9 @@ def ensure_storage_dir() -> Path:
     return STORAGE_FOLDER
 
 
-# =============================================================================
 # FORMAT-SPECIFIC TEXT EXTRACTORS
 # Each function takes a Path and returns a plain text string.
-# =============================================================================
+
 
 def _load_txt(path: Path) -> str:
     """Read a plain text or markdown file."""
@@ -163,10 +160,8 @@ _FORMAT_LOADERS = {
     ".htm":  _load_html,
 }
 
-
-# =============================================================================
 # NATIVE WINDOWS FILE PICKER DIALOG
-# =============================================================================
+
 
 def open_file_dialog() -> str | None:
     """
@@ -201,10 +196,8 @@ def open_file_dialog() -> str | None:
     root.destroy()
     return file_path if file_path else None
 
-
-# =============================================================================
 # STORAGE HELPERS
-# =============================================================================
+
 
 def _copy_to_storage(source_path: Path) -> Path:
     """
@@ -244,10 +237,8 @@ def _save_url_as_txt(text: str, url: str) -> Path:
     dest.write_text(text, encoding="utf-8")
     return dest
 
-
-# =============================================================================
 # PUBLIC API
-# =============================================================================
+
 
 def load_document(source: str) -> tuple[str, str]:
     """
@@ -273,7 +264,7 @@ def load_document(source: str) -> tuple[str, str]:
     ValueError         — unsupported format or no text could be extracted
     ImportError        — a required library is not installed
     """
-    # ── Web URL ──────────────────────────────────────────────────────────
+    # ── Web URL 
     if source.startswith("http://") or source.startswith("https://"):
         print(f"\n  [Loader] Fetching: {source}")
         text  = _load_url(source)
@@ -282,7 +273,7 @@ def load_document(source: str) -> tuple[str, str]:
         print(f"  [Loader] Saved (web → .txt): {saved.name}")
         return text, source
 
-    # ── Local file ───────────────────────────────────────────────────────
+    # ── Local file
     path = Path(source).resolve()
 
     if not path.exists():

@@ -2,13 +2,17 @@
 keyword_model
 =======================
 BM25-based keyword extraction and retrieval model.
+it is like a smart librarian that finds the best pages for the question
 """
 
 from rank_bm25 import BM25Okapi
 
 
 class KeywordModel:
-    """Wraps BM25Okapi and exposes a consistent API."""
+    """Wraps BM25Okapi and exposes a consistent API.
+    wraps=clean system instead of using BM25 directly evrywhere
+    like: build(), get_scores()
+    """
 
     def __init__(self):
         self._bm25: BM25Okapi | None = None
@@ -17,7 +21,12 @@ class KeywordModel:
     def build(self, tokenized_chunks: list[list[str]]) -> None:
         """
         Fit the BM25 model on a list of pre-tokenised chunk token lists.
-
+        fit =where BM25 learns the documents
+        fitting the model:
+            BM25 reads:-word
+                        -frequencies
+                        -rare words
+                        -chunk lengths
         """
         if not tokenized_chunks:
             raise ValueError("tokenized_chunks must not be empty.")
@@ -25,6 +34,7 @@ class KeywordModel:
         self._built = True
         print(f"BM25 model built over {len(tokenized_chunks)} chunks.")
 
+#score all chunks for a user query 
     def get_scores(self, query_tokens: list[str]) -> list[float]:
         """Return a BM25 score for every indexed chunk."""
         self._check_built()

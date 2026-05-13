@@ -1,21 +1,11 @@
 """
-main
+main.py
 ========
 Keyword Retrieval RAG — main entry point.
 
-This file controls the full pipeline step by step.
-
-Pipeline order:
-    1. Load document
-    2. Clean text
-    3. Detect language
-    4. Chunk text
-    5. Tokenise chunks
-    6. Build inverted index + BM25
-    7. Normalise query
-    8. Retrieve top-K chunks
-    9. Build prompt
-   10. Generate answer
+Run from your terminal:
+    cd C:\\Users\\DC\\Desktop\\keyword_RAG_01\\src
+    python main.py
 """
 
 import textwrap
@@ -37,33 +27,23 @@ from config import (
 # =============================================================================
 
 state = {
-    # ── Current document (updated on each load) ──────────────────
-    "text":              None,   # raw text of the most recently loaded doc
-    "source":            None,   # file path or URL of the most recently loaded doc
-    "cleaned_text":      None,   # cleaned text of the most recently loaded doc
-    "lang_code":         None,   # detected language code, e.g. 'en', 'fr'
-    "nltk_lang":         None,   # NLTK stopword set name, e.g. 'english'
-
-    # ── Accumulated across ALL loaded documents ───────────────────
-    # These grow with every document loaded — never reset unless
-    # the user explicitly resets the pipeline.
-    "all_chunk_records":    [],  # chunks from every document loaded so far
-    "all_tokenized_chunks": [],  # token lists from every document loaded
-    "loaded_documents":     [],  # source labels of all docs loaded so far
-
-    # ── Index and BM25 (rebuilt after each document load) ─────────
-    # Always covers ALL documents in the session.
-    "chunk_records":     None,   # kept in sync with all_chunk_records
-    "tokenized_chunks":  None,   # kept in sync with all_tokenized_chunks
-    "inverted_index":    None,   # word → chunk lookup across ALL documents
-    "bm25":              None,   # BM25 model across ALL documents
-
-    # ── Query and answer ──────────────────────────────────────────
-    "query":             None,   # original user question
-    "normalised_query":  None,   # keywords extracted from question
-    "retrieved_results": None,   # top-K most relevant chunks
-    "prompt":            None,   # final prompt sent to the LLM
-    "answer":            None,   # generated answer from the LLM
+    "text":              None,
+    "source":            None,
+    "cleaned_text":      None,
+    "lang_code":         None,
+    "nltk_lang":         None,
+    "all_chunk_records":    [],
+    "all_tokenized_chunks": [],
+    "loaded_documents":     [],
+    "chunk_records":     None,
+    "tokenized_chunks":  None,
+    "inverted_index":    None,
+    "bm25":              None,
+    "query":             None,
+    "normalised_query":  None,
+    "retrieved_results": None,
+    "prompt":            None,
+    "answer":            None,
 }
 
 
@@ -71,53 +51,39 @@ state = {
 # DISPLAY HELPERS
 # =============================================================================
 
-LINE = "─" * 52
+LINE  = "─" * 52
+DLINE = "=" * 52
 
-def show_header(title):
-    print(f"\n{'=' * 52}")
+def show_main_header():
+    print(f"\n{DLINE}")
+    print("  Keyword Retrieval RAG — Main Menu")
+    print(f"{DLINE}")
+
+def show_sub_header(title):
+    print(f"\n{DLINE}")
     print(f"  {title}")
-    print(f"{'=' * 52}\n")
+    print(f"{DLINE}\n")
 
-def show_success(message):
-    print(f"  ✓  {message}")
-
-def show_error(message):
-    print(f"  ✗  {message}")
-
-def show_info(message):
-    print(f"  →  {message}")
+def show_success(msg): print(f"  ✓  {msg}")
+def show_error(msg):   print(f"  ✗  {msg}")
+def show_info(msg):    print(f"  →  {msg}")
 
 def wait_for_enter():
-    input("\n  Press Enter to go back to the menu...")
+    input(f"\n  Press Enter to go back to the menu...\n{LINE}\n")
 
 def check_required(*keys):
-    """Check that required pipeline steps have been completed."""
     missing = [k for k in keys if state[k] is None]
     if missing:
-        show_error(f"You need to complete these steps first: {', '.join(missing)}")
+        show_error(f"Complete these steps first: {', '.join(missing)}")
         return False
     return True
 
 
 # =============================================================================
-# AUTO-PIPELINE — runs Steps 2 to 6 automatically after every document load
-# Chunks accumulate across ALL documents so queries search everything.
+# AUTO PIPELINE
 # =============================================================================
 
 def _auto_run_steps_2_to_6():
-    """
-    Automatically run Steps 2 to 6 right after a document is loaded.
-
-    MULTI-DOCUMENT SUPPORT:
-    Chunks from every document are accumulated in:
-        state["all_chunk_records"]     — grows with each document
-        state["all_tokenized_chunks"]  — grows with each document
-
-    The inverted index and BM25 model are rebuilt each time to cover
-    ALL documents loaded so far — not just the most recent one.
-    This means queries search across every document in the session.
-    """
-    # ── Step 2 — Clean text ───────────────────────────────────────
     print("  [Step 2]  Cleaning text...", end=" ", flush=True)
     try:
         from preprocessing.preprocess import clean_text
@@ -125,31 +91,25 @@ def _auto_run_steps_2_to_6():
         state["cleaned_text"] = cleaned
         print(f"done  ({len(cleaned):,} chars)")
     except Exception as e:
-        print(f"FAILED: {e}")
-        return
+        print(f"FAILED: {e}"); return
 
-    # ── Step 3 — Detect language ──────────────────────────────────
     print("  [Step 3]  Detecting language...", end=" ", flush=True)
     try:
         from preprocessing.preprocess import detect_language
         lang_code, nltk_lang = detect_language(state["cleaned_text"])
         state["lang_code"]   = lang_code
         state["nltk_lang"]   = nltk_lang
-        print(f"done  ({lang_code} → {nltk_lang})")
+        print(f"done  ({lang_code} -> {nltk_lang})")
     except Exception as e:
-        print(f"FAILED: {e}")
-        return
+        print(f"FAILED: {e}"); return
 
-    # ── Step 4 — Chunk this document and accumulate ───────────────
     print("  [Step 4]  Chunking text...", end=" ", flush=True)
     try:
         from utils.chunker import chunk_text_with_metadata
-
         source    = state["source"] or "document"
         doc_title = Path(source).stem if not source.startswith("http") else "web_document"
         doc_num   = len(state["loaded_documents"]) + 1
         doc_id    = f"doc-{doc_num:03d}"
-
         new_chunks = chunk_text_with_metadata(
             state["cleaned_text"],
             chunk_size    = DEFAULT_CHUNK_SIZE,
@@ -159,62 +119,51 @@ def _auto_run_steps_2_to_6():
             document_id   = doc_id,
             lang_code     = state["lang_code"],
         )
-
-        # Accumulate — add new chunks to the global list
         state["all_chunk_records"].extend(new_chunks)
         state["loaded_documents"].append(source)
         state["chunk_records"] = state["all_chunk_records"]
-
         total = len(state["all_chunk_records"])
         ndocs = len(state["loaded_documents"])
-        print(f"done  ({len(new_chunks)} new chunks | {total} total across {ndocs} doc(s))")
-
+        print(f"done  ({len(new_chunks)} new | {total} total across {ndocs} doc(s))")
     except Exception as e:
-        print(f"FAILED: {e}")
-        return
+        print(f"FAILED: {e}"); return
 
-    # ── Step 5 — Tokenise new chunks and accumulate ───────────────
     print("  [Step 5]  Tokenising chunks...", end=" ", flush=True)
     try:
         from preprocessing.preprocess import tokenize_chunk
-
         new_tokenized = [
             tokenize_chunk(c["text"], state["nltk_lang"])
             for c in new_chunks
         ]
         state["all_tokenized_chunks"].extend(new_tokenized)
         state["tokenized_chunks"] = state["all_tokenized_chunks"]
-
-        print(f"done  ({len(state['all_tokenized_chunks'])} total chunks tokenised)")
+        print(f"done  ({len(state['all_tokenized_chunks'])} total)")
     except Exception as e:
-        print(f"FAILED: {e}")
-        return
+        print(f"FAILED: {e}"); return
 
-    # ── Step 6 — Rebuild index + BM25 across ALL documents ────────
-    print("  [Step 6]  Rebuilding index + BM25 (all documents)...", end=" ", flush=True)
+    print("  [Step 6]  Building index + BM25...", end=" ", flush=True)
     try:
-        from indexing.indexer    import build_inverted_index
-        from indexing.bm25_store import build_bm25
-
+        from indexing.indexer    import build_inverted_index, _save_pickle
+        from indexing.bm25_store import build_bm25, save_bm25
         inv_idx = build_inverted_index(
             state["all_chunk_records"],
             state["all_tokenized_chunks"],
         )
         bm25 = build_bm25(state["all_tokenized_chunks"])
-
         state["inverted_index"] = inv_idx
         state["bm25"]           = bm25
-
-        print(f"done  ({len(inv_idx):,} unique terms across all documents)")
+        _save_pickle(inv_idx,                    "keyword_index.pkl")
+        save_bm25(bm25,                          "keyword_bm25.pkl")
+        _save_pickle(state["all_chunk_records"], "keyword_chunks.pkl")
+        print(f"done  ({len(inv_idx):,} terms)  — saved to disk")
     except Exception as e:
-        print(f"FAILED: {e}")
-        return
+        print(f"FAILED: {e}"); return
 
     ndocs  = len(state["loaded_documents"])
     ntotal = len(state["all_chunk_records"])
     print()
-    show_success(f"{ndocs} document(s) indexed | {ntotal} total chunks in index.")
-    print("  Load another document or go to Step 7 to ask a question.")
+    show_success(f"{ndocs} document(s) indexed | {ntotal} total chunks | saved to disk.")
+    print("  Load another document or choose option [3] to ask a question.")
 
 
 # =============================================================================
@@ -222,123 +171,68 @@ def _auto_run_steps_2_to_6():
 # =============================================================================
 
 def _do_load(source, load_document_fn):
-    """
-    Internal helper: load a document from a path or URL,
-    save it to storage, update pipeline state, show a preview,
-    then automatically run Steps 2 to 6.
-    """
     try:
         text, label = load_document_fn(source)
-
         state["text"]   = text
         state["source"] = label
-
         name = Path(label).name if not label.startswith("http") else label
         show_success(f"Document loaded:  {name}")
-        show_success(f"Size:  {len(text):,} characters  |  {len(text.split()):,} words")
-
+        show_success(f"Size: {len(text):,} chars | {len(text.split()):,} words")
         print(f"\n  --- Text preview (first 300 characters) ---\n")
-        print(textwrap.fill(
-            text[:300], width=66,
-            initial_indent="    ",
-            subsequent_indent="    "
-        ))
+        print(textwrap.fill(text[:600], width=120,
+              initial_indent="    ", subsequent_indent="    "))
         if len(text) > 300:
             print("    ...")
-
-        # Auto-run Steps 2 → 6 immediately after loading
         print(f"\n  {LINE}")
-        print("  Running Steps 2 → 6 automatically...\n")
+        print("  Running Steps 2 to 6 automatically...\n")
         _auto_run_steps_2_to_6()
-
-    except FileNotFoundError as e:
-        show_error(f"File not found: {e}")
-    except ValueError as e:
-        show_error(f"Could not read file: {e}")
-    except Exception as e:
-        show_error(f"Unexpected error: {e}")
-
+    except FileNotFoundError as e: show_error(f"File not found: {e}")
+    except ValueError as e:        show_error(f"Could not read file: {e}")
+    except Exception as e:         show_error(f"Unexpected error: {e}")
     wait_for_enter()
 
 
 def step_load_document():
-    """
-    STEP 1 — Load Document
-    ----------------------
-    Lets the user choose how to load a document.
-    Supported formats: PDF, DOCX, TXT, MD, HTML, or a web URL.
-    The original file is copied to the tests/ storage folder.
-    After loading, Steps 2 to 6 run automatically.
-    """
     from utils.loader import (
-        load_document,
-        open_file_dialog,
-        ensure_storage_dir,
-        SUPPORTED_EXTENSIONS,
-        _FORMAT_LOADERS,
+        load_document, open_file_dialog,
+        ensure_storage_dir, SUPPORTED_EXTENSIONS, _FORMAT_LOADERS,
     )
-
     while True:
-        show_header("Step 1 — Load Document")
-
+        show_sub_header("Step 1 — Load Document")
         print("  How do you want to load your document?\n")
         print("  [1]  Browse my laptop  (opens file picker)")
         print("  [2]  Enter a web URL   (https://...)")
         print("  [3]  Type / paste a file path manually")
-        print("  [4]  Choose from already loaded documents")
+        print("  [4]  Choose from already stored documents")
         print("  [0]  Back to main menu")
         print()
-
         choice = input("  Your choice: ").strip()
 
-        # ── [0] Back ──────────────────────────────────────────────
         if choice == "0":
             return
-
-        # ── [1] File picker dialog ────────────────────────────────
         elif choice == "1":
             while True:
                 print()
-                show_info("Opening file picker — check your taskbar if it does not appear.")
-                print()
+                show_info("Opening file picker...")
                 selected = open_file_dialog()
                 if not selected:
-                    print("\n  No file was selected.\n")
-                    print("  [1]  Try again")
-                    print("  [0]  Back to loader menu")
-                    print()
-                    retry = input("  Your choice: ").strip()
-                    if retry == "1":
-                        continue
-                    else:
-                        break
+                    print("\n  No file selected.\n  [1] Try again  [0] Back")
+                    if input("\n  > ").strip() != "1": break
                 else:
-                    _do_load(selected, load_document)
-                    return
-
-        # ── [2] Web URL ───────────────────────────────────────────
+                    _do_load(selected, load_document); return
         elif choice == "2":
             while True:
                 print()
-                url = input("  Paste the URL  (or type 0 to go back): ").strip()
-                if url == "0":
-                    break
+                url = input("  URL  (or 0 to go back): ").strip()
+                if url == "0": break
                 if not url.startswith("http://") and not url.startswith("https://"):
-                    show_error("URL must start with http:// or https://  — please try again.")
-                    continue
-                _do_load(url, load_document)
-                return
-
-        # ── [3] Manual file path ──────────────────────────────────
+                    show_error("URL must start with http:// or https://"); continue
+                _do_load(url, load_document); return
         elif choice == "3":
             print()
-            path_str = input("  Enter the file path  (or type 0 to go back): ").strip().strip('"').strip("'")
-            if path_str == "0":
-                continue
-            _do_load(path_str, load_document)
-            return
-
-        # ── [4] Pick from storage folder ──────────────────────────
+            path_str = input("  File path  (or 0 to go back): ").strip().strip('"').strip("'")
+            if path_str != "0":
+                _do_load(path_str, load_document); return
         elif choice == "4":
             store = ensure_storage_dir()
             stored_files = sorted(
@@ -347,137 +241,97 @@ def step_load_document():
             )
             if not stored_files:
                 print(f"\n  Storage folder is empty: {store}")
-                print("  Load a document first using options 1, 2, or 3.\n")
-                wait_for_enter()
-                continue
-
+                wait_for_enter(); continue
             while True:
-                print(f"\n  Documents in storage folder:\n  {store}\n")
-                for i, f in enumerate(stored_files, start=1):
-                    size_kb = f.stat().st_size / 1024
-                    print(f"    [{i}]  {f.name}  ({size_kb:.1f} KB)")
-                print(f"\n    [0]  Back to loader menu")
-                print()
+                print(f"\n  Storage folder: {store}\n")
+                for i, f in enumerate(stored_files, 1):
+                    print(f"    [{i}]  {f.name}  ({f.stat().st_size/1024:.1f} KB)")
+                print(f"\n    [0]  Back\n")
                 pick = input("  Your choice: ").strip()
-
-                if pick == "0":
-                    break
-
+                if pick == "0": break
                 try:
                     idx = int(pick) - 1
-                    if not (0 <= idx < len(stored_files)):
-                        raise ValueError
+                    if not (0 <= idx < len(stored_files)): raise ValueError
                 except ValueError:
-                    show_error("Please enter a valid number from the list.")
-                    continue
-
+                    show_error("Invalid selection."); continue
                 chosen = stored_files[idx]
-
-                # Read directly — do NOT call load_document() to avoid
-                # copying the file again into storage.
                 try:
-                    ext = chosen.suffix.lower()
-                    if ext in _FORMAT_LOADERS:
-                        text = _FORMAT_LOADERS[ext](chosen)
-                    else:
-                        text = chosen.read_text(encoding="utf-8", errors="replace")
-
+                    ext  = chosen.suffix.lower()
+                    text = _FORMAT_LOADERS[ext](chosen) if ext in _FORMAT_LOADERS \
+                           else chosen.read_text(encoding="utf-8", errors="replace")
                     state["text"]   = text
                     state["source"] = str(chosen)
-
-                    show_success(f"Document loaded:  {chosen.name}")
-                    show_success(f"Size:  {len(text):,} characters  |  {len(text.split()):,} words")
+                    show_success(f"Loaded: {chosen.name}")
+                    show_success(f"Size: {len(text):,} chars | {len(text.split()):,} words")
                     print(f"\n  Preview:\n")
-                    print(textwrap.fill(
-                        text[:300], width=66,
-                        initial_indent="    ",
-                        subsequent_indent="    "
-                    ))
-                    if len(text) > 300:
-                        print("    ...")
-
-                    # Auto-run Steps 2 → 6
+                    print(textwrap.fill(text[:600], width=120,
+                          initial_indent="    ", subsequent_indent="    "))
+                    if len(text) > 300: print("    ...")
                     print(f"\n  {LINE}")
-                    print("  Running Steps 2 → 6 automatically...\n")
+                    print("  Running Steps 2 to 6 automatically...\n")
                     _auto_run_steps_2_to_6()
-
                 except Exception as e:
                     show_error(f"Could not read file: {e}")
-
-                wait_for_enter()
-                return
-
+                wait_for_enter(); return
         else:
-            show_error("Invalid choice — please type 1, 2, 3, 4, or 0.")
+            show_error("Invalid choice.")
 
 
 # =============================================================================
-# STEP 2 — CLEAN TEXT
+# INDIVIDUAL STEPS WITH RICH OUTPUT
 # =============================================================================
 
 def step_clean_text():
-    """
-    STEP 2 — Clean Text
-    -------------------
-    Strips control characters, collapses whitespace, and removes
-    formatting artefacts so the text is clean for chunking.
-    Requires Step 1 to be completed first.
-    """
-    show_header("Step 2 — Clean Text")
+    show_sub_header("Step 2 — Clean Text")
     if not check_required("text"):
-        wait_for_enter()
-        return
+        wait_for_enter(); return
     from preprocessing.preprocess import clean_text
+
+    print("  BEFORE cleaning (first 400 chars):\n")
+    print(textwrap.fill(state["text"][:600], width=120,
+          initial_indent="    ", subsequent_indent="    "))
+    print()
     cleaned = clean_text(state["text"])
     state["cleaned_text"] = cleaned
-    show_success(f"Before cleaning:  {len(state['text']):,} characters")
-    show_success(f"After  cleaning:  {len(cleaned):,} characters")
+    print("  AFTER cleaning (first 400 chars):\n")
+    print(textwrap.fill(cleaned[:600], width=120,
+          initial_indent="    ", subsequent_indent="    "))
+    print()
+    show_success(f"Before: {len(state['text']):,} chars")
+    show_success(f"After : {len(cleaned):,} chars")
+    show_info("Removed: control characters, extra spaces, triple blank lines.")
     wait_for_enter()
 
 
-# =============================================================================
-# STEP 3 — DETECT LANGUAGE
-# =============================================================================
-
 def step_detect_language():
-    """
-    STEP 3 — Detect Language
-    ------------------------
-    Automatically detects the document language and selects the
-    matching NLTK stopword list.
-    Requires Step 2 to be completed first.
-    """
-    show_header("Step 3 — Detect Language")
+    show_sub_header("Step 3 — Detect Language")
     if not check_required("cleaned_text"):
-        wait_for_enter()
-        return
+        wait_for_enter(); return
     from preprocessing.preprocess import detect_language
+
+    print("  Text sample used for detection (first 500 chars):\n")
+    print(textwrap.fill(state["cleaned_text"][:500], width=120,
+          initial_indent="    ", subsequent_indent="    "))
+    print()
     lang_code, nltk_lang = detect_language(state["cleaned_text"])
     state["lang_code"]   = lang_code
     state["nltk_lang"]   = nltk_lang
-    show_success(f"Detected language:   {lang_code}")
-    show_success(f"NLTK stopword set:   {nltk_lang}")
+    show_success(f"Detected language code : {lang_code}")
+    show_success(f"NLTK stopword set      : {nltk_lang}")
+    print()
+    show_info("How it works: langdetect analyses character n-gram frequencies")
+    show_info("in the first 2000 characters and matches them to 55 language profiles.")
+    show_info(f"'{lang_code}' maps to the '{nltk_lang}' NLTK stopword corpus.")
     wait_for_enter()
 
 
-# =============================================================================
-# STEP 4 — CHUNK TEXT
-# =============================================================================
-
 def step_chunk_text():
-    """
-    STEP 4 — Chunk Text
-    -------------------
-    Splits the cleaned text into overlapping word blocks.
-    Uses defaults from config.py — no prompts needed.
-    Requires Steps 2 and 3 to be completed first.
-    """
-    show_header("Step 4 — Chunk Text")
+    show_sub_header("Step 4 — Chunk Text")
     if not check_required("cleaned_text", "lang_code"):
-        wait_for_enter()
-        return
+        wait_for_enter(); return
     from utils.chunker import chunk_text_with_metadata
-    show_info(f"Using chunk size: {DEFAULT_CHUNK_SIZE} words  |  overlap: {DEFAULT_CHUNK_OVERLAP} words")
+
+    show_info(f"Chunk size: {DEFAULT_CHUNK_SIZE} words | Overlap: {DEFAULT_CHUNK_OVERLAP} words")
     source    = state["source"] or "document"
     doc_title = Path(source).stem if not source.startswith("http") else "web_document"
     doc_num   = len(state["loaded_documents"]) + 1
@@ -491,43 +345,48 @@ def step_chunk_text():
         document_id   = doc_id,
         lang_code     = state["lang_code"],
     )
-    # Accumulate across all documents
     state["all_chunk_records"].extend(new_chunks)
     state["loaded_documents"].append(source)
     state["chunk_records"] = state["all_chunk_records"]
-    total = len(state["all_chunk_records"])
-    ndocs = len(state["loaded_documents"])
-    show_success(f"{len(new_chunks)} new chunks | {total} total across {ndocs} doc(s)")
-    print(f"\n  --- First 3 chunks ---\n")
-    for chunk in new_chunks[:3]:
-        print(f"  {chunk['chunk_id']}  |  {chunk['word_count']} words  "
-              f"|  span: {chunk['start_word_index']} → {chunk['end_word_index']}")
-        print(textwrap.fill(
-            chunk['text'][:140], width=66,
-            initial_indent="    ",
-            subsequent_indent="    "
-        ))
-        print(f"  {LINE}")
+    show_success(f"{len(new_chunks)} new chunks | {len(state['all_chunk_records'])} total")
+
+    while True:
+        print()
+        print("  What would you like to see?\n")
+        print("  [1]  Top 5 chunks  (full chunk text)")
+        print("  [2]  All chunks    (full text)")
+        print("  [0]  Continue")
+        print()
+        pick = input("  Your choice: ").strip()
+        if pick == "0":
+            break
+        elif pick == "1":
+            print()
+            for chunk in new_chunks[:5]:
+                print(f"  {chunk['chunk_id']}  |  {chunk['word_count']} words  "
+                      f"|  span: {chunk['start_word_index']}to{chunk['end_word_index']}")
+                print(textwrap.fill(chunk['text'], width=120,
+                      initial_indent="    ", subsequent_indent="    "))
+                print(f"  {LINE}")
+        elif pick == "2":
+            print()
+            for chunk in new_chunks:
+                print(f"  {chunk['chunk_id']}  |  {chunk['word_count']} words  "
+                      f"|  span: {chunk['start_word_index']}to{chunk['end_word_index']}")
+                print(textwrap.fill(chunk['text'], width=120,
+                      initial_indent="    ", subsequent_indent="    "))
+                print(f"  {LINE}")
+        else:
+            show_error("Invalid choice.")
     wait_for_enter()
 
 
-# =============================================================================
-# STEP 5 — TOKENISE CHUNKS
-# =============================================================================
-
 def step_tokenise():
-    """
-    STEP 5 — Tokenise Chunks
-    ------------------------
-    Converts each chunk into a list of clean stemmed tokens.
-    Requires Steps 4 and 3 to be completed first.
-    """
-    show_header("Step 5 — Tokenise Chunks")
+    show_sub_header("Step 5 — Tokenise Chunks")
     if not check_required("chunk_records", "nltk_lang"):
-        wait_for_enter()
-        return
+        wait_for_enter(); return
     from preprocessing.preprocess import tokenize_chunk
-    # Tokenise only the new chunks (those not yet in all_tokenized_chunks)
+
     already = len(state["all_tokenized_chunks"])
     new_chunks_to_tokenize = state["all_chunk_records"][already:]
     new_tokenized = [
@@ -536,77 +395,87 @@ def step_tokenise():
     ]
     state["all_tokenized_chunks"].extend(new_tokenized)
     state["tokenized_chunks"] = state["all_tokenized_chunks"]
-    total = len(state["all_tokenized_chunks"])
-    show_success(f"{len(new_tokenized)} new chunks tokenised | {total} total")
-    if state["all_tokenized_chunks"]:
-        show_success(f"Sample tokens from chunk 0:  {state['all_tokenized_chunks'][0][:12]}")
+
+    show_success(f"{len(new_tokenized)} new chunks tokenised | {len(state['all_tokenized_chunks'])} total")
+    print()
+    show_info("Pipeline: lowercase -> split -> remove stopwords -> stem")
+    print()
+    chunks_to_show = state["all_chunk_records"][:5]
+    tokens_to_show = state["all_tokenized_chunks"][:5]
+    for chunk, tokens in zip(chunks_to_show, tokens_to_show):
+        print(f"  {chunk['chunk_id']}")
+        print(f"  Original (first 100 chars) : {chunk['text'][:100]}")
+        print(f"  Tokens   (first 15)        : {tokens[:20]}")
+        print(f"  {LINE}")
     wait_for_enter()
 
 
-# =============================================================================
-# STEP 6 — BUILD INVERTED INDEX + BM25
-# =============================================================================
-
 def step_build_index():
-    """
-    STEP 6 — Build Inverted Index + BM25  ⭐
-    -----------------------------------------
-    The inverted index maps every word to the chunks that contain it.
-    BM25 scores chunks by relevance to the query.
-    Requires Steps 4 and 5 to be completed first.
-    """
-    show_header("Step 6 — Build Inverted Index + BM25  ⭐")
-    if not check_required("chunk_records", "tokenized_chunks"):
-        wait_for_enter()
-        return
-    from indexing.indexer    import build_inverted_index
-    from indexing.bm25_store import build_bm25
+    show_sub_header("Step 6 — Build Inverted Index + BM25")
+    if not check_required("chunk_records", "nltk_lang"):
+        wait_for_enter(); return
+    from indexing.indexer    import build_inverted_index, _save_pickle
+    from indexing.bm25_store import build_bm25, save_bm25
+
+    already = len(state["all_tokenized_chunks"])
+    new_to_tok = state["all_chunk_records"][already:]
+    if new_to_tok:
+        from preprocessing.preprocess import tokenize_chunk
+        new_tok = [tokenize_chunk(c["text"], state["nltk_lang"]) for c in new_to_tok]
+        state["all_tokenized_chunks"].extend(new_tok)
+        state["tokenized_chunks"] = state["all_tokenized_chunks"]
+
+    print("  Building inverted index...\n")
+    show_info("Maps every word to the chunks that contain it.")
+    show_info("Structure: { term: { doc_freq, postings: [chunk_id, tf, positions] } }")
+    print()
     inv_idx = build_inverted_index(
         state["all_chunk_records"],
         state["all_tokenized_chunks"]
     )
+    print("  Building BM25 model...\n")
+    show_info("Scores chunks using: term frequency + IDF + length normalisation.")
+    show_info("Parameters: k1=1.5 (TF saturation), b=0.75 (length normalisation)")
+    print()
     bm25 = build_bm25(state["all_tokenized_chunks"])
     state["inverted_index"] = inv_idx
     state["bm25"]           = bm25
+
+    _save_pickle(inv_idx,                    "keyword_index.pkl")
+    save_bm25(bm25,                          "keyword_bm25.pkl")
+    _save_pickle(state["all_chunk_records"], "keyword_chunks.pkl")
+
     ndocs = len(state["loaded_documents"])
     total = len(state["all_chunk_records"])
-    show_success(f"Inverted index built  —  {len(inv_idx):,} unique terms across {ndocs} doc(s)")
-    show_success(f"BM25 model built      —  {total} total chunks indexed")
-    print(f"\n  --- Sample index entries ---\n")
-    for term in list(inv_idx.keys())[:6]:
-        entry = inv_idx[term]
-        print(f"    '{term}'  →  {entry['doc_freq']} chunk(s)  |  {len(entry['postings'])} posting(s)")
+    show_success(f"Index: {len(inv_idx):,} unique terms across {ndocs} doc(s)")
+    show_success(f"BM25 : {total} total chunks indexed")
+    show_success("Saved: keyword_index.pkl | keyword_bm25.pkl | keyword_chunks.pkl")
+    print()
+    print("  --- Top 8 terms by document frequency ---\n")
+    top_terms = sorted(inv_idx.items(), key=lambda x: x[1]["doc_freq"], reverse=True)[:8]
+    print(f"  {'Term':<20}  {'doc_freq':>10}  {'total_tf':>10}")
+    print(f"  {'─'*20}  {'─'*10}  {'─'*10}")
+    for term, entry in top_terms:
+        total_tf = sum(p["tf"] for p in entry["postings"])
+        print(f"  {term:<20}  {entry['doc_freq']:>10}  {total_tf:>10}")
     wait_for_enter()
 
 
-# =============================================================================
-# STEP 7 — NORMALISE QUERY
-# =============================================================================
-
 def step_normalise_query():
-    """
-    STEP 7 — Normalise Query
-    ------------------------
-    Takes the user question and extracts key search terms using the
-    Groq LLM. Falls back to raw question if API call fails.
-    """
-    show_header("Step 7 — Normalise Query")
-
+    show_sub_header("Step 7 — Normalise Query")
     print("  Type your question about the documents.\n")
     raw_query = input("  Your question: ").strip()
     if not raw_query:
         show_error("Question cannot be empty.")
-        wait_for_enter()
-        return
-
+        wait_for_enter(); return
     state["query"] = raw_query
     api_key = GROQ_API_KEY
-
     if not api_key:
         state["normalised_query"] = raw_query
-        show_success("No API key in config — using raw question.")
+        show_success("No API key — using raw question.")
     else:
         show_info("Sending query to LLM for keyword extraction...")
+        print(f"\n  Original question  : {raw_query}")
         try:
             from groq import Groq
             client = Groq(api_key=api_key)
@@ -619,224 +488,268 @@ def step_normalise_query():
                 "No punctuation. No explanation."
             )
             response = client.chat.completions.create(
-                model    = QUERY_MODEL_NAME,
-                messages = [
+                model   = QUERY_MODEL_NAME,
+                messages= [
                     {"role": "system", "content": system_prompt},
                     {"role": "user",   "content": f"Question: {raw_query}"},
                 ],
-                max_tokens  = 100,
-                temperature = 0.0,
+                max_tokens=100, temperature=0.0,
             )
             normalised = response.choices[0].message.content.strip()
             state["normalised_query"] = normalised
-            show_success(f"Original question:  {raw_query}")
-            show_success(f"Extracted keywords: {normalised}")
+            print(f"  Extracted keywords : {normalised}")
+            print()
+            show_info("How it works: the LLM removes filler words like 'what', 'how',")
+            show_info("'tell me about' and keeps only content-bearing search terms.")
         except Exception as e:
-            show_error(f"LLM call failed: {e}")
-            show_info("Falling back to raw question.")
+            show_error(f"LLM failed: {e} — using raw question.")
             state["normalised_query"] = raw_query
-
     wait_for_enter()
 
 
-# =============================================================================
-# STEP 8 — RETRIEVE TOP-K CHUNKS
-# =============================================================================
-
 def step_retrieve():
-    """
-    STEP 8 — Retrieve Top-K Chunks
-    --------------------------------
-    Scores every chunk across ALL loaded documents using BM25
-    and returns the top-K most relevant results.
-    Requires Steps 6 and 7 to be completed first.
-    """
-    show_header("Step 8 — Retrieve Top-K Chunks")
+    show_sub_header("Step 8 — Retrieve Top-K Chunks")
     if not check_required("normalised_query", "bm25", "chunk_records", "inverted_index", "nltk_lang"):
-        wait_for_enter()
-        return
-
+        wait_for_enter(); return
     from retrieval.retriever import retrieve
-
-    top_k = DEFAULT_TOP_K
-    ndocs = len(state["loaded_documents"])
-    show_info(f"Searching across {ndocs} document(s) | {len(state['all_chunk_records'])} total chunks")
+    top_k  = DEFAULT_TOP_K
+    ndocs  = len(state["loaded_documents"])
+    ntotal = len(state["all_chunk_records"])
+    show_info(f"Searching across {ndocs} document(s) | {ntotal} total chunks")
     show_info(f"Retrieving top {top_k} chunks")
-
+    print()
     results = retrieve(
-        state["normalised_query"],
-        state["bm25"],
-        state["chunk_records"],
-        state["inverted_index"],
-        nltk_lang = state["nltk_lang"],
-        top_k     = top_k,
+        state["normalised_query"], state["bm25"],
+        state["chunk_records"], state["inverted_index"],
+        nltk_lang=state["nltk_lang"], top_k=top_k,
     )
     state["retrieved_results"] = results
     show_success(f"{len(results)} chunks retrieved for: '{state['query']}'")
     print()
-
     for item in results:
         print(f"  Rank {item['rank']}  |  {item['chunk_id']}  |  BM25: {item['bm25_score']:.4f}")
         print(f"  Document : {item['document_title']}")
         print(f"  Matched  : {item['matched_terms']}")
-        print(textwrap.fill(
-            item['text'][:160], width=66,
-            initial_indent="    ",
-            subsequent_indent="    "
-        ))
+        print(textwrap.fill(item['text'][:400], width=120,
+              initial_indent="    ", subsequent_indent="    "))
         print(f"  {LINE}")
-
     wait_for_enter()
 
 
-# =============================================================================
-# STEP 9 — BUILD PROMPT
-# =============================================================================
-
 def step_build_prompt():
-    """
-    STEP 9 — Build Prompt
-    ----------------------
-    Assembles the retrieved chunks into a structured prompt for the LLM.
-    Requires Steps 7 and 8 to be completed first.
-    """
-    show_header("Step 9 — Build Prompt")
+    show_sub_header("Step 9 — Build Prompt")
     if not check_required("query", "retrieved_results"):
-        wait_for_enter()
-        return
+        wait_for_enter(); return
     from utils.prompts import build_prompt
     prompt = build_prompt(state["query"], state["retrieved_results"])
     state["prompt"] = prompt
-    show_success(f"Prompt built  —  {len(prompt):,} characters")
+    show_success(f"Prompt built — {len(prompt):,} characters")
     print(f"\n  --- Prompt preview (first 400 characters) ---\n")
-    print(textwrap.fill(
-        prompt[:400], width=66,
-        initial_indent="    ",
-        subsequent_indent="    "
-    ))
-    if len(prompt) > 400:
-        print("    ...")
+    print(textwrap.fill(prompt[:400], width=120,
+          initial_indent="    ", subsequent_indent="    "))
+    if len(prompt) > 400: print("    ...")
     wait_for_enter()
 
 
-# =============================================================================
-# STEP 10 — GENERATE ANSWER
-# =============================================================================
-
 def step_generate_answer():
-    """
-    STEP 10 — Generate Answer
-    --------------------------
-    Sends the prompt to the Groq LLM and prints the grounded answer
-    with evidence and citations from the retrieved chunks.
-    Requires Step 9 to be completed first.
-    """
-    show_header("Step 10 — Generate Answer")
+    show_sub_header("Step 10 — Generate Answer")
     if not check_required("prompt"):
-        wait_for_enter()
-        return
+        wait_for_enter(); return
     try:
         from generation.generator import generate_answer
         show_info(f"Sending prompt to {GENERATOR_MODEL} — please wait...")
         answer = generate_answer(state["prompt"])
         state["answer"] = answer
-
-        print(f"\n{'=' * 52}")
-        print("  ANSWER")
-        print(f"{'=' * 52}\n")
-
+        print(f"\n{DLINE}\n  ANSWER\n{DLINE}\n")
         for line in answer.splitlines():
             stripped = line.strip()
-            if not stripped:
-                print()
+            if not stripped: print()
             elif stripped.startswith("- "):
-                print(textwrap.fill(
-                    stripped, width=66,
-                    initial_indent="  ",
-                    subsequent_indent="    ",
-                ))
+                print(textwrap.fill(stripped, width=120,
+                      initial_indent="  ", subsequent_indent="    "))
             else:
-                print(textwrap.fill(
-                    stripped, width=66,
-                    initial_indent="  ",
-                ))
+                print(textwrap.fill(stripped, width=120, initial_indent="  "))
         print()
         show_success("Answer generated.")
-
     except (ValueError, ImportError, RuntimeError) as e:
         show_error(str(e))
-
     wait_for_enter()
 
 
 # =============================================================================
-# EXTRAS — Full pipeline, state viewer, reset
+# OPTION 1 — FULL PROCESS
 # =============================================================================
 
-def run_full_pipeline():
-    """
-    Run the full pipeline from start to finish.
-
-    Smart behaviour:
-    - Step 1  (Load document)  always runs — you pick the document.
-    - Steps 2-6 are SKIPPED if they already ran automatically after
-      loading (which they always do). No need to repeat them.
-    - Step 7  (Query) pauses and waits — if left empty the pipeline
-      stops cleanly instead of crashing through Steps 8-10.
-    - Steps 8-10 run automatically after a valid query is entered.
-    """
-    show_header("Full Pipeline — Steps 1 to 10")
-    print("  This will run every step in order.\n")
-    confirm = input("  Are you sure? Type  yes  to continue: ").strip().lower()
+def full_process():
+    show_sub_header("Full Process — Steps 1 to 10")
+    print("  This runs the complete pipeline from document to answer.\n")
+    confirm = input("  Type  yes  to continue: ").strip().lower()
     if confirm != "yes":
-        show_info("Cancelled — returning to menu.")
-        wait_for_enter()
-        return
+        show_info("Cancelled.")
+        wait_for_enter(); return
 
-    # ── Step 1 — always load a document ──────────────────────────
     step_load_document()
 
-    # ── Steps 2-6 — skip if auto-pipeline already ran them ───────
     if state["inverted_index"] is not None:
         show_info("Steps 2-6 already completed automatically after loading.")
-        show_info(
-            f"{len(state['loaded_documents'])} doc(s) | "
-            f"{len(state['all_chunk_records'])} chunks | "
-            f"{len(state['inverted_index']):,} terms in index."
-        )
+        show_info(f"{len(state['loaded_documents'])} doc(s) | "
+                  f"{len(state['all_chunk_records'])} chunks | "
+                  f"{len(state['inverted_index']):,} index terms.")
     else:
-        # Auto-pipeline did not run — run steps manually
-        for step_fn in [step_clean_text, step_detect_language,
-                        step_chunk_text, step_tokenise, step_build_index]:
-            step_fn()
+        for fn in [step_clean_text, step_detect_language,
+                   step_chunk_text, step_tokenise, step_build_index]:
+            fn()
 
-    # ── Step 7 — query (stop if empty) ───────────────────────────
     step_normalise_query()
     if state["normalised_query"] is None:
-        show_error("No query entered — pipeline stopped. Run Step 7 when ready.")
+        show_error("No query entered — use option [3] to ask later.")
         return
 
-    # ── Steps 8-10 — run automatically ───────────────────────────
     step_retrieve()
     step_build_prompt()
     step_generate_answer()
 
 
-def show_pipeline_state():
-    """Show which steps have been completed and which are pending."""
-    show_header("Pipeline State")
+# =============================================================================
+# OPTION 2 — STEP BY STEP MODE
+# =============================================================================
 
-    # Show loaded documents list
-    docs = state["loaded_documents"]
-    if docs:
-        print(f"  Documents in index: {len(docs)}")
-        for i, d in enumerate(docs, 1):
-            name = Path(d).name if not d.startswith("http") else d
-            print(f"    [{i}]  {name}")
-        print(f"  Total chunks     : {len(state['all_chunk_records'])}")
+def step_by_step_mode():
+    while True:
+        show_sub_header("Keyword Retrieval RAG — Step by Step")
+        print("  [ 1]  Step 1  — Load document")
+        print("  [ 2]  Step 2  — Clean text")
+        print("  [ 3]  Step 3  — Detect language")
+        print("  [ 4]  Step 4  — Chunk text")
+        print("  [ 5]  Step 5  — Tokenise chunks")
+        print("  [ 6]  Step 6  — Build index + BM25")
+        print("  [ 7]  Step 7  — Normalise query")
+        print("  [ 8]  Step 8  — Retrieve chunks")
+        print("  [ 9]  Step 9  — Build prompt")
+        print("  [10]  Step 10 — Generate answer")
+        print(f"\n  {LINE}")
+        print("  [ 0]  Back to main menu")
         print()
+        choice = input("  Your choice: ").strip()
 
-    step_labels = [
+        steps = {
+            "1": step_load_document, "2": step_clean_text,
+            "3": step_detect_language, "4": step_chunk_text,
+            "5": step_tokenise, "6": step_build_index,
+            "7": step_normalise_query, "8": step_retrieve,
+            "9": step_build_prompt, "10": step_generate_answer,
+        }
+
+        if choice == "0": return
+        elif choice in steps: steps[choice]()
+        else: show_error("Invalid choice.")
+
+
+# =============================================================================
+# OPTION 3 — ASK YOUR QUESTION
+# =============================================================================
+
+def ask_question():
+    show_sub_header("Ask Your Question")
+
+    if state["bm25"] is None or state["inverted_index"] is None:
+        show_error("No documents indexed yet.")
+        show_info("Use option [1] or [2] to load documents first,")
+        show_info("or option [6] to restore a previous session from disk.")
+        wait_for_enter(); return
+
+    ndocs  = len(state["loaded_documents"])
+    ntotal = len(state["all_chunk_records"])
+    show_info(f"Searching across {ndocs} document(s) | {ntotal} total chunks")
+    print()
+    for i, d in enumerate(state["loaded_documents"], 1):
+        name = Path(d).name if not d.startswith("http") else d
+        print(f"  [{i}]  {name}")
+    print()
+
+    raw_query = input("  Your question: ").strip()
+    if not raw_query:
+        show_error("Question cannot be empty.")
+        wait_for_enter(); return
+
+    state["query"] = raw_query
+    api_key = GROQ_API_KEY
+
+    if api_key:
+        show_info("Extracting keywords...")
+        try:
+            from groq import Groq
+            client = Groq(api_key=api_key)
+            system_prompt = (
+                "You are a keyword extraction assistant for a search engine. "
+                "Extract only the most important content-bearing keywords. "
+                "Return ONLY a space-separated list of keywords. No punctuation."
+            )
+            resp = client.chat.completions.create(
+                model   = QUERY_MODEL_NAME,
+                messages= [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": f"Question: {raw_query}"},
+                ],
+                max_tokens=100, temperature=0.0,
+            )
+            normalised = resp.choices[0].message.content.strip()
+            state["normalised_query"] = normalised
+            show_info(f"Keywords : {normalised}")
+        except Exception as e:
+            show_error(f"LLM failed: {e} — using raw question.")
+            state["normalised_query"] = raw_query
+    else:
+        state["normalised_query"] = raw_query
+
+    from retrieval.retriever import retrieve
+    show_info(f"Searching {ntotal} chunks across {ndocs} document(s)...")
+    results = retrieve(
+        state["normalised_query"], state["bm25"],
+        state["chunk_records"], state["inverted_index"],
+        nltk_lang=state["nltk_lang"] or "english",
+        top_k=DEFAULT_TOP_K,
+    )
+    state["retrieved_results"] = results
+
+    if not results:
+        show_error("No matching chunks found. Try different keywords.")
+        wait_for_enter(); return
+
+    from utils.prompts import build_prompt
+    prompt = build_prompt(raw_query, results)
+    state["prompt"] = prompt
+
+    try:
+        from generation.generator import generate_answer
+        show_info(f"Generating answer with {GENERATOR_MODEL}...")
+        answer = generate_answer(prompt)
+        state["answer"] = answer
+        print(f"\n{DLINE}\n  ANSWER\n{DLINE}\n")
+        for line in answer.splitlines():
+            stripped = line.strip()
+            if not stripped: print()
+            elif stripped.startswith("- "):
+                print(textwrap.fill(stripped, width=120,
+                      initial_indent="  ", subsequent_indent="    "))
+            else:
+                print(textwrap.fill(stripped, width=120, initial_indent="  "))
+        print()
+        show_success("Done.")
+    except Exception as e:
+        show_error(f"Generation failed: {e}")
+
+    wait_for_enter()
+
+
+# =============================================================================
+# OPTION 4 — CHECK SYSTEM STATUS
+# =============================================================================
+
+def check_system_status():
+    show_sub_header("Check System Status")
+
+    steps = [
         ("text",                "Step 1  — Document loaded"),
         ("cleaned_text",        "Step 2  — Text cleaned"),
         ("lang_code",           "Step 3  — Language detected"),
@@ -849,39 +762,290 @@ def show_pipeline_state():
         ("answer",              "Step 10 — Answer generated"),
     ]
 
-    for key, label in step_labels:
+    for key, label in steps:
         val = state[key]
         if val is None or val == []:
-            symbol = "○"
-            detail = "not done yet"
+            symbol, detail = "o", "not done yet"
         else:
-            symbol = "✓"
-            if isinstance(val, str):
-                detail = f"{len(val):,} characters"
-            elif isinstance(val, list):
-                detail = f"{len(val)} items"
-            elif isinstance(val, dict):
-                detail = f"{len(val):,} keys"
-            else:
-                detail = "ready"
+            symbol = "v"
+            if isinstance(val, str):    detail = f"{len(val):,} characters"
+            elif isinstance(val, list): detail = f"{len(val)} items"
+            elif isinstance(val, dict): detail = f"{len(val):,} keys"
+            else:                       detail = "ready"
         print(f"  [{symbol}]  {label:<35}  {detail}")
+
+    print()
+    if state["inverted_index"]:
+        print(f"  Index summary:")
+        print(f"    Documents : {len(state['loaded_documents'])}")
+        print(f"    Chunks    : {len(state['all_chunk_records'])}")
+        print(f"    Terms     : {len(state['inverted_index']):,}")
+        print(f"    Disk      : keyword_index.pkl | keyword_bm25.pkl | keyword_chunks.pkl")
+    else:
+        show_info("No index built yet.")
 
     wait_for_enter()
 
 
-def reset_pipeline():
-    """Clear all pipeline state and start fresh."""
-    show_header("Reset Pipeline")
-    print("  This will clear all pipeline data including all loaded documents.\n")
-    confirm = input("  Are you sure? Type  yes  to reset: ").strip().lower()
+# =============================================================================
+# OPTION 5 — VIEW STORED DOCUMENTS
+# =============================================================================
+
+def view_stored_documents():
+    show_sub_header("View Stored Documents")
+
+    if not state["all_chunk_records"]:
+        show_error("No documents loaded yet.")
+        wait_for_enter(); return
+
+    inv_idx = state["inverted_index"]
+    chunks  = state["all_chunk_records"]
+    docs    = state["loaded_documents"]
+
+    while True:
+        print(f"  What would you like to view?\n")
+        print(f"  [1]  Loaded files    ({len(docs)} document(s))")
+        print(f"  [2]  All chunks      ({len(chunks)} total)")
+        if inv_idx:
+            print(f"  [3]  Index terms    ({len(inv_idx):,} terms)")
+        else:
+            print(f"  [3]  Index terms    (not built yet)")
+        print(f"  [4]  Look up a term  (search the inverted index)")
+        print(f"  [0]  Back to main menu")
+        print()
+        pick = input("  Your choice: ").strip()
+
+        if pick == "0":
+            break
+        elif pick == "1":
+            print()
+            for i, d in enumerate(docs, 1):
+                name = Path(d).name if not d.startswith("http") else d
+                doc_chunks = [c for c in chunks if c["source"] == d]
+                print(f"  [{i}]  {name}")
+                print(f"       Doc ID : {doc_chunks[0]['document_id'] if doc_chunks else 'n/a'}")
+                print(f"       Chunks : {len(doc_chunks)}")
+                print()
+        elif pick == "2":
+            print()
+            for chunk in chunks:
+                print(f"  {chunk['chunk_id']:<25}  "
+                      f"{chunk['word_count']} words  |  "
+                      f"span: {chunk['start_word_index']}to{chunk['end_word_index']}  |  "
+                      f"doc: {chunk['document_title']}")
+            print()
+        elif pick == "3":
+            if not inv_idx:
+                show_error("Index not built yet."); continue
+            top_terms = sorted(
+                inv_idx.items(), key=lambda x: x[1]["doc_freq"], reverse=True
+            )[:25]
+            print()
+            print(f"  {'Term':<22}  {'doc_freq':>10}  {'total_tf':>10}")
+            print(f"  {'─'*22}  {'─'*10}  {'─'*10}")
+            for term, entry in top_terms:
+                total_tf = sum(p["tf"] for p in entry["postings"])
+                print(f"  {term:<22}  {entry['doc_freq']:>10}  {total_tf:>10}")
+            print(f"\n  (top 25 by document frequency — {len(inv_idx):,} total terms)")
+            print()
+        elif pick == "4":
+            if not inv_idx:
+                show_error("Index not built yet."); continue
+            print()
+            from nltk.stem import PorterStemmer
+            lookup = input("  Enter a term to look up: ").strip()
+            if lookup:
+                stemmed = PorterStemmer().stem(lookup.lower())
+                entry   = inv_idx.get(stemmed)
+                if not entry:
+                    print(f"\n  '{lookup}' (stemmed: '{stemmed}') — not found in index.")
+                else:
+                    print(f"\n  Term     : '{lookup}'  (stemmed -> '{stemmed}')")
+                    print(f"  doc_freq : {entry['doc_freq']} chunk(s)")
+                    for p in entry["postings"]:
+                        print(f"    chunk_id={p['chunk_id']}  "
+                              f"tf={p['tf']}  "
+                              f"positions={p['positions'][:6]}")
+            print()
+        else:
+            show_error("Invalid choice.")
+
+
+# =============================================================================
+# OPTION 6 — RESTORE PREVIOUS WORK
+# =============================================================================
+
+def inspect_index():
+    """[6] Inspect index -> deep view of docs, chunks, and indexed terms."""
+    show_sub_header("Inspect Index")
+
+    if not state["inverted_index"]:
+        show_error("No index built yet.")
+        show_info("Load documents using option [1] or [2] first,")
+        show_info("or restore a previous session using option [7].")
+        wait_for_enter()
+        return
+
+    inv_idx = state["inverted_index"]
+    chunks  = state["all_chunk_records"]
+    docs    = state["loaded_documents"]
+
+    while True:
+        ndocs  = len(docs)
+        nchunk = len(chunks)
+        nterms = len(inv_idx)
+        print(f"  Index: {ndocs} document(s) | {nchunk} chunks | {nterms:,} unique terms")
+        print()
+        print("  What would you like to inspect?")
+        print()
+        print(f"  [1]  Documents      ({ndocs} loaded)")
+        print(f"  [2]  All chunks     ({nchunk} total)")
+        print(f"  [3]  Top 25 index terms  (by document frequency)")
+        print(f"  [4]  Look up a specific term")
+        print(f"  [0]  Back to main menu")
+        print()
+        pick = input("  Your choice: ").strip()
+
+        if pick == "0":
+            break
+
+        elif pick == "1":
+            print()
+            for i, d in enumerate(docs, 1):
+                name = Path(d).name if not d.startswith("http") else d
+                doc_chunks = [c for c in chunks if c["source"] == d]
+                total_words = sum(c["word_count"] for c in doc_chunks)
+                print(f"  [{i}]  {name}")
+                print(f"       Doc ID  : {doc_chunks[0]['document_id'] if doc_chunks else 'n/a'}")
+                print(f"       Chunks  : {len(doc_chunks)}")
+                print(f"       Words   : {total_words:,}")
+                print()
+
+        elif pick == "2":
+            print()
+            for chunk in chunks:
+                print(f"  {chunk['chunk_id']:<28}  "
+                      f"{chunk['word_count']:>4} words  |  "
+                      f"span: {chunk['start_word_index']:>5} to {chunk['end_word_index']:<5}  |  "
+                      f"{chunk['document_title']}")
+            print()
+
+        elif pick == "3":
+            top_terms = sorted(
+                inv_idx.items(),
+                key=lambda x: x[1]["doc_freq"],
+                reverse=True
+            )[:25]
+            print()
+            print(f"  {'Term':<22}  {'doc_freq':>10}  {'total_tf':>10}")
+            print(f"  {'─'*22}  {'─'*10}  {'─'*10}")
+            for term, entry in top_terms:
+                total_tf = sum(p["tf"] for p in entry["postings"])
+                print(f"  {term:<22}  {entry['doc_freq']:>10}  {total_tf:>10}")
+            print()
+            print(f"  (top 25 of {len(inv_idx):,} total terms)")
+            print()
+
+        elif pick == "4":
+            print()
+            from nltk.stem import PorterStemmer
+            lookup = input("  Enter a term to look up (e.g. 'retrieval'): ").strip()
+            if not lookup:
+                continue
+            stemmed = PorterStemmer().stem(lookup.lower())
+            entry   = inv_idx.get(stemmed)
+            if not entry:
+                print(f"  Term '{lookup}' (stemmed: '{stemmed}') — not found in index.")
+                print(f"  Tip: the index stores stemmed forms. Try the root word.")
+            else:
+                print(f"  Term     : '{lookup}'  (stemmed -> '{stemmed}')")
+                print(f"  doc_freq : {entry['doc_freq']} chunk(s) contain this term")
+                for p in entry["postings"]:
+                    print(f"    chunk_id  = {p['chunk_id']}")
+                    print(f"    tf        = {p['tf']}  (appears {p['tf']} times in this chunk)")
+                    pos_preview = p["positions"][:8]
+                    ellipsis = "..." if len(p["positions"]) > 8 else ""
+                    print(f"    positions = {pos_preview}{ellipsis}")
+                    print()
+            print()
+
+        else:
+            show_error("Invalid choice.")
+
+
+def restore_previous_work():
+    show_sub_header("Restore Previous Work")
+
+    files   = ["keyword_index.pkl", "keyword_bm25.pkl", "keyword_chunks.pkl"]
+    missing = [f for f in files if not Path(f).exists()]
+
+    if missing:
+        show_error(f"Missing files: {', '.join(missing)}")
+        show_info("No previous session found.")
+        show_info("Load documents using option [1] or [2] first.")
+        wait_for_enter(); return
+
+    try:
+        from indexing.bm25_store import load_bm25
+        bm25, inv_idx, chunks = load_bm25(
+            "keyword_bm25.pkl",
+            "keyword_index.pkl",
+            "keyword_chunks.pkl",
+        )
+        state["bm25"]              = bm25
+        state["inverted_index"]    = inv_idx
+        state["all_chunk_records"] = chunks
+        state["chunk_records"]     = chunks
+
+        seen = []
+        for c in chunks:
+            if c["source"] not in seen:
+                seen.append(c["source"])
+        state["loaded_documents"] = seen
+
+        if chunks:
+            state["lang_code"] = chunks[0].get("lang_code", "en")
+            from preprocessing.preprocess import detect_language
+            _, nltk_lang = detect_language(chunks[0]["text"])
+            state["nltk_lang"] = nltk_lang
+
+        ndocs  = len(state["loaded_documents"])
+        ntotal = len(chunks)
+        nterms = len(inv_idx)
+
+        show_success("Previous session restored successfully.")
+        show_success(f"Documents : {ndocs}")
+        show_success(f"Chunks    : {ntotal}")
+        show_success(f"Terms     : {nterms:,}")
+        print()
+        print("  Documents in index:")
+        for i, d in enumerate(state["loaded_documents"], 1):
+            name = Path(d).name if not d.startswith("http") else d
+            print(f"    [{i}]  {name}")
+        print()
+        show_info("You can now use option [3] to ask a question.")
+
+    except Exception as e:
+        show_error(f"Restore failed: {e}")
+
+    wait_for_enter()
+
+
+# =============================================================================
+# OPTION 7 — RESET EVERYTHING
+# =============================================================================
+
+def reset_everything():
+    show_sub_header("Reset Everything")
+    print("  This will clear ALL pipeline data including all loaded documents.\n")
+    confirm = input("  Type  yes  to confirm: ").strip().lower()
     if confirm == "yes":
         for key in state:
             state[key] = None
-        # Re-initialise list fields so .extend() works after reset
         state["all_chunk_records"]    = []
         state["all_tokenized_chunks"] = []
         state["loaded_documents"]     = []
-        show_success("Pipeline reset — all documents and chunks cleared.")
+        show_success("Everything has been reset. You can start fresh.")
     else:
         show_info("Reset cancelled.")
     wait_for_enter()
@@ -891,55 +1055,41 @@ def reset_pipeline():
 # MAIN MENU
 # =============================================================================
 
-MENU_OPTIONS = [
-    ("1",  "Step 1  — Load document",           step_load_document),
-    ("2",  "Step 2  — Clean text",               step_clean_text),
-    ("3",  "Step 3  — Detect language",          step_detect_language),
-    ("4",  "Step 4  — Chunk text",               step_chunk_text),
-    ("5",  "Step 5  — Tokenise chunks",          step_tokenise),
-    ("6",  "Step 6  — Build index + BM25  ⭐",   step_build_index),
-    ("7",  "Step 7  — Normalise query",          step_normalise_query),
-    ("8",  "Step 8  — Retrieve chunks",          step_retrieve),
-    ("9",  "Step 9  — Build prompt",             step_build_prompt),
-    ("10", "Step 10 — Generate answer",          step_generate_answer),
-    ("─",  None,                                 None),
-    ("f",  "Run full pipeline  (Steps 1 → 10)",  run_full_pipeline),
-    ("s",  "Show pipeline state",                show_pipeline_state),
-    ("r",  "Reset pipeline",                     reset_pipeline),
-    ("0",  "Exit",                               None),
-]
-
-
-def print_menu():
-    print(f"\n{'=' * 52}")
-    print("  Keyword Retrieval RAG — Menu")
-    print(f"{'=' * 52}\n")
-    for key, label, _ in MENU_OPTIONS:
-        if key == "─":
-            print(f"  {LINE}")
-        else:
-            print(f"  [{key:>2}]  {label}")
-    print()
-
-
 def main():
-    option_map = {
-        key: fn
-        for key, label, fn in MENU_OPTIONS
-        if key != "─"
-    }
     while True:
-        print_menu()
-        choice = input("  Your choice: ").strip().lower()
+        show_main_header()
+        print()
+        print("  [1]  Start full process    -> Run all steps from beginning to final answer")
+        print("  [2]  Step by step mode     -> Run each step one by one manually")
+        print("  [3]  Ask your question     -> Search documents and generate an answer")
+        print("  [4]  Check system status   -> See completed steps, chunks, and index status")
+        print("  [5]  View stored documents -> Show loaded files, chunks, and indexed terms")
+        print("  [6]  Inspect index         -> View docs, chunks, and indexed terms in detail")
+        print("  [7]  Reload index from disk -> Restore previous session without re-loading")
+        print("  [8]  Reset everything      -> Clear all pipeline data and start fresh")
+        print(f"\n  {LINE}")
+        print("  [0]  Exit Program")
+        print(f"  {LINE}\n")
+        choice = input("  Your choice: ").strip()
+
+        menu = {
+            "1": full_process,
+            "2": step_by_step_mode,
+            "3": ask_question,
+            "4": check_system_status,
+            "5": view_stored_documents,
+            "6": inspect_index,
+            "7": restore_previous_work,
+            "8": reset_everything,
+        }
+
         if choice == "0":
             print("\n  Goodbye!\n")
             break
-        if choice not in option_map:
-            show_error("Invalid choice — please type a number or letter from the menu.")
-            continue
-        fn = option_map[choice]
-        if fn is not None:
-            fn()
+        elif choice in menu:
+            menu[choice]()
+        else:
+            show_error("Invalid choice — type a number from 0 to 8.")
 
 
 # =============================================================================

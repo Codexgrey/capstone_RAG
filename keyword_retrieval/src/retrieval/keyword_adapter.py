@@ -30,17 +30,16 @@ from src.indexing.bm25_store import load_bm25
 from src.retrieval.retriever import retrieve as _retrieve
 
 
-# ---------------------------------------------------------------------------
+
 # persistence paths — configurable via environment variables
-# ---------------------------------------------------------------------------
+
 INDEX_PATH  = os.environ.get('KEYWORD_INDEX_PATH',  'keyword_index.pkl')
 BM25_PATH   = os.environ.get('KEYWORD_BM25_PATH',   'keyword_bm25.pkl')
 CHUNKS_PATH = os.environ.get('KEYWORD_CHUNKS_PATH', 'keyword_chunks.pkl')
 
 
-# ---------------------------------------------------------------------------
 # module-level state — loaded once, reused across calls
-# ---------------------------------------------------------------------------
+
 _bm25          = None
 _index         = None
 _chunk_records = None
@@ -69,9 +68,9 @@ def _reset_state() -> None:
     _chunk_records = None
 
 
-# ---------------------------------------------------------------------------
+
 # public interface
-# ---------------------------------------------------------------------------
+
 
 def ingest(
     file_paths:    list,
