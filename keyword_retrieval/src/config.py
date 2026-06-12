@@ -8,7 +8,12 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+<<<<<<< HEAD
+load_dotenv()  
+GROQ_API_KEY      = os.environ.get("GROQ_API_KEY", "YOUR_GROQ_API_KEY_HERE")
+=======
 load_dotenv()
+>>>>>>> 590d3f8e04a0690da0694a94c69bb26a5835d1dd
 
 # ── Groq API ──────────────────────────────────────────────────────────────────
 GROQ_API_KEY     = os.environ.get("GROQ_API_KEY", "")
