@@ -4,16 +4,16 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.config.database import get_db, init_db
 from app.config.settings import settings
-from app.api import auth 
+from app.api import auth
 from app.api import upload
 from app.api import query
-
+from app.api import evaluate                          # ← TriviaQA evaluation
 
 
 app = FastAPI(
-    title = "Capstone RAG API",
+    title       = "Capstone RAG API",
     description = "Backend for the RAG system",
-    version = "1.0.0"
+    version     = "1.0.0"
 )
 
 # Add the CORS
@@ -25,8 +25,8 @@ app.add_middleware(
         "http://127.0.0.1:5173",
     ],
     allow_credentials = True,
-    allow_methods = ["*"],
-    allow_headers = ["*"],
+    allow_methods     = ["*"],
+    allow_headers     = ["*"],
 )
 
 @app.on_event("startup")
@@ -49,7 +49,7 @@ def _create_admin_if_missing():
     from app.config.dependencies import hash_password
     import uuid
     from datetime import datetime
- 
+
     db = SessionLocal()
     try:
         existing = db.query(User).filter(User.email == "admin@admin.com").first()
@@ -70,14 +70,16 @@ def _create_admin_if_missing():
         print(f"⚠️  Admin creation error: {e}")
     finally:
         db.close()
- 
 
 
 # endpoints for register and login
-app.include_router(auth.router, prefix="/api") 
-app.include_router(upload.router, prefix="/api")
+app.include_router(auth.router,     prefix="/api")
+app.include_router(upload.router,   prefix="/api")
 # endpoints for query and chat sessions
-app.include_router(query.router, prefix="/api")
+app.include_router(query.router,    prefix="/api")
+# TriviaQA evaluation endpoints
+app.include_router(evaluate.router, prefix="/api")   # ← new
+
 
 @app.get("/")
 def root():
@@ -85,7 +87,6 @@ def root():
 
 @app.get("/db_test")
 def db_test(db: Session = Depends(get_db)):
-    result = db.execute(text("SELECT version();"))
+    result  = db.execute(text("SELECT version();"))
     version = result.fetchone()[0]
-
     return {"Postgres Version": version}

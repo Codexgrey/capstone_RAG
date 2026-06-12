@@ -33,3 +33,8 @@ export const deleteSession = async (id: string) => {
   const res = await apiClient.delete(`/api/chat/sessions/${id}`);
   return res.data;
 };
+
+export const deleteAllSessions = async () => {
+  const res = await apiClient.delete('/api/chat/sessions');
+  return res.data;
+};

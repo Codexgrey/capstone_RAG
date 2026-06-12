@@ -64,33 +64,39 @@ def handle_query(
     retrieval_method: str = "vector",
     top_k: int = 3,
     document_ids: list = None,
+    persist: bool = True,
 ) -> dict:
 
     start_time = time.time()
 
-    # 1 — Get or create session
-    session = _get_or_create_session(db, user_id, session_id, first_question=question)
+    # 1 — Get or create session (skipped entirely when persist=False, e.g.
+    #     benchmark/evaluation runs that should not show up in chat history)
+    session_id_str = None
+    if persist:
+        session = _get_or_create_session(db, user_id, session_id, first_question=question)
+        session_id_str = str(session.id)
 
-    # 2 — Save user message
-    _save_message(db=db, session_id=session.id, user_id=user_id,
-                  role="user", content=question)
+        # 2 — Save user message
+        _save_message(db=db, session_id=session.id, user_id=user_id,
+                      role="user", content=question)
 
     # 3 — Short-circuit: document list intent
     if _is_document_list_query(question):
         answer = _build_document_list_answer(db, user_id)
         latency_ms = (time.time() - start_time) * 1000
-        _save_message(db=db, session_id=session.id, user_id=user_id,
-                      role="assistant", content=answer,
-                      retrieval_method=None, source_chunk_ids="")
-        db.add(Log(
-            user_id=user_id, action="query_sent",
-            detail=f"question={question[:50]} method=system(doc_list) latency={round(latency_ms)}ms",
-            timestamp=datetime.utcnow()
-        ))
-        db.commit()
+        if persist:
+            _save_message(db=db, session_id=session.id, user_id=user_id,
+                          role="assistant", content=answer,
+                          retrieval_method=None, source_chunk_ids="")
+            db.add(Log(
+                user_id=user_id, action="query_sent",
+                detail=f"question={question[:50]} method=system(doc_list) latency={round(latency_ms)}ms",
+                timestamp=datetime.utcnow()
+            ))
+            db.commit()
         return format_response(
             answer=answer, chunks=[], retrieval_method=None,
-            latency_ms=latency_ms, session_id=str(session.id), question=question,
+            latency_ms=latency_ms, session_id=session_id_str, question=question,
         )
 
     # 4 — Retrieve chunks via the requested method
@@ -113,19 +119,20 @@ def handle_query(
 
     # 8 — Save assistant message
     source_chunk_ids = ",".join([c.get("chunk_id", "") for c in chunks])
-    _save_message(db=db, session_id=session.id, user_id=user_id,
-                  role="assistant", content=answer,
-                  retrieval_method=actual_method,
-                  source_chunk_ids=source_chunk_ids)
+    if persist:
+        _save_message(db=db, session_id=session.id, user_id=user_id,
+                      role="assistant", content=answer,
+                      retrieval_method=actual_method,
+                      source_chunk_ids=source_chunk_ids)
 
-    # 9 — Log
-    db.add(Log(
-        user_id=user_id, action="query_sent",
-        detail=(f"question={question[:50]} method={actual_method} "
-                f"chunks={len(chunks)} latency={round(latency_ms)}ms"),
-        timestamp=datetime.utcnow()
-    ))
-    db.commit()
+        # 9 — Log
+        db.add(Log(
+            user_id=user_id, action="query_sent",
+            detail=(f"question={question[:50]} method={actual_method} "
+                    f"chunks={len(chunks)} latency={round(latency_ms)}ms"),
+            timestamp=datetime.utcnow()
+        ))
+        db.commit()
 
     # 10 — Return formatted response
     return format_response(
@@ -133,7 +140,7 @@ def handle_query(
         chunks=chunks,
         retrieval_method=actual_method,
         latency_ms=latency_ms,
-        session_id=str(session.id),
+        session_id=session_id_str,
         question=question,
     )
 

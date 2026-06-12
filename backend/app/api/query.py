@@ -135,6 +135,30 @@ def rename_session(
     return {"session_id": str(session.id), "title": session.title}
 
 
+# DELETE /chat/sessions — delete ALL sessions (and their messages) for the user
+@router.delete("/chat/sessions", status_code=status.HTTP_200_OK)
+def delete_all_sessions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    session_ids = [
+        s.id for s in db.query(ChatSession.id)
+                        .filter(ChatSession.user_id == current_user.id)
+                        .all()
+    ]
+
+    if session_ids:
+        db.query(ChatMessage).filter(ChatMessage.session_id.in_(session_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(ChatSession).filter(ChatSession.id.in_(session_ids)).delete(
+            synchronize_session=False
+        )
+        db.commit()
+
+    return {"deleted": len(session_ids)}
+
+
 # DELETE /chat/sessions/{session_id} — delete a session and its messages
 @router.delete("/chat/sessions/{session_id}", status_code=status.HTTP_200_OK)
 def delete_session(
