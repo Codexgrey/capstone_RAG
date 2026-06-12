@@ -209,6 +209,7 @@ def run_triviaqa_evaluation(
             session_id       = None,
             retrieval_method = retrieval_method,
             top_k            = top_k,
+            persist          = False,
         )
         return result.get("answer", "")
 

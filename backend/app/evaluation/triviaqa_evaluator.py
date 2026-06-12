@@ -77,7 +77,7 @@ _BANK_INDEX: Dict[str, Dict[str, Any]] = {
 def _normalize_answer(s: str) -> str:
     """Lower text and remove punctuation, articles, and extra whitespace."""
     def remove_articles(text: str) -> str:
-        return re.sub(r"(a|an|the)", " ", text)
+        return re.sub(r"\b(a|an|the)\b", " ", text)
 
     def white_space_fix(text: str) -> str:
         return " ".join(text.split())
