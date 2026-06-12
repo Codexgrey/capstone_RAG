@@ -1,12 +1,14 @@
 """
-retrieval
-==========
+retrieval/retriever.py
+=======================
 Keyword search and BM25 ranking — returns the top-K most relevant chunks.
+
+This module is called by main.py at Step 8.
 
 What this module does
 ---------------------
-Given a normalised query and the BM25 model + inverted
-index it:
+Given a normalised query (from Step 7) and the BM25 model + inverted
+index (from Step 6), it:
 
   1. Tokenises the query using the same pipeline as the chunks
      (lowercase → remove stopwords → stem).
@@ -44,8 +46,10 @@ One public function
 
 from preprocessing.preprocess import tokenize_chunk
 
-# STEP 8 — RETRIEVE TOP-K CHUNKS
 
+# =============================================================================
+# STEP 8 — RETRIEVE TOP-K CHUNKS
+# =============================================================================
 
 def retrieve(
     query:          str,

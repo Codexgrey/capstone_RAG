@@ -1,7 +1,7 @@
 """
 preprocessing
 ==============
-Text cleaning, language detection and tokenisation.
+Text cleaning, language detection, and tokenisation.
 
 """
 
@@ -18,9 +18,11 @@ nltk.download("punkt",     quiet=True)
 nltk.download("punkt_tab", quiet=True)
 nltk.download("stopwords", quiet=True)
 
+
+# =============================================================================
 # LANGUAGE MAP
 # Maps langdetect codes → NLTK stopword corpus names.
-
+# =============================================================================
 
 LANGUAGE_MAP = {
     "en": "english",
@@ -59,8 +61,10 @@ _FALLBACK_STOPWORDS = {
     "too", "very", "s", "t", "don", "ll", "ve", "re", "m", "d",
 }
 
-# STEP 2 — CLEAN TEXT
 
+# =============================================================================
+# STEP 2 — CLEAN TEXT
+# =============================================================================
 
 def clean_text(text: str) -> str:
    
@@ -76,8 +80,9 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
+# =============================================================================
 # STEP 3 — DETECT LANGUAGE
-
+# =============================================================================
 
 def detect_language(text: str) -> tuple[str, str]:
     """
@@ -95,7 +100,10 @@ def detect_language(text: str) -> tuple[str, str]:
     nltk_lang = LANGUAGE_MAP.get(lang_code, "english")
     return lang_code, nltk_lang
 
+
+# =============================================================================
 # STEP 5 — TOKENISE CHUNK
+# =============================================================================
 
 def tokenize_chunk(text: str, nltk_lang: str = "english") -> list[str]:
     """

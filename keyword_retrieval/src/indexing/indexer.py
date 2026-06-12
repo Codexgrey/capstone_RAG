@@ -1,5 +1,5 @@
 """
-indexing
+indexing/indexer.py
 ====================
 Builds the positional inverted index and exposes the full ingestion
 pipeline used by the adapter.
@@ -11,7 +11,9 @@ import pickle
 from pathlib import Path
 
 
+# =============================================================================
 # BUILD INVERTED INDEX
+# =============================================================================
 
 def build_inverted_index(
     chunk_records:    list[dict],
@@ -64,8 +66,9 @@ def build_inverted_index(
     return index
 
 
+# =============================================================================
 # BUILD PIPELINE — called by keyword_adapter.ingest()
-
+# =============================================================================
 
 def build_pipeline(
     file_paths:    list[str],
@@ -174,8 +177,10 @@ def build_pipeline(
 
     return all_chunk_records, inverted_index
 
-# UTILITY HELPERS
 
+# =============================================================================
+# UTILITY HELPERS
+# =============================================================================
 
 def _save_pickle(obj, path: str | Path) -> None:
     """Save any object to disk as a pickle file."""

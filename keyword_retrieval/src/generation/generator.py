@@ -26,9 +26,9 @@ practical for interactive RAG pipelines where response time matters.
 from config import GROQ_API_KEY, GENERATOR_MODEL, MAX_NEW_TOKENS, TEMPERATURE
 
 
-
+# =============================================================================
 # STEP 10 — GENERATE ANSWER
-
+# =============================================================================
 
 def generate_answer(prompt: str) -> str:
     """
@@ -45,7 +45,7 @@ def generate_answer(prompt: str) -> str:
     Parameters
     ----------
     prompt : str
-        The structured prompt built by build_prompt() 
+        The structured prompt built by build_prompt() in Step 9.
 
     Returns
     -------

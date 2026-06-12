@@ -41,28 +41,9 @@ _INDEX_PATH  = "keyword_index.pkl"
 _lock = threading.RLock()
 
 
-<<<<<<< HEAD
-
-# persistence paths — configurable via environment variables
-
-INDEX_PATH  = os.environ.get('KEYWORD_INDEX_PATH',  'keyword_index.pkl')
-BM25_PATH   = os.environ.get('KEYWORD_BM25_PATH',   'keyword_bm25.pkl')
-CHUNKS_PATH = os.environ.get('KEYWORD_CHUNKS_PATH', 'keyword_chunks.pkl')
-
-
-# module-level state — loaded once, reused across calls
-
-_bm25          = None
-_index         = None
-_chunk_records = None
-
-
-def _load_state() -> None:
-=======
 # ── Public interface ──────────────────────────────────────────────────────────
 
 def ingest(chunks: list, document_id: str) -> dict:
->>>>>>> 590d3f8e04a0690da0694a94c69bb26a5835d1dd
     """
     Build/update the BM25 index with chunks from a newly uploaded document.
 
@@ -72,43 +53,8 @@ def ingest(chunks: list, document_id: str) -> dict:
     The backend chunker already produces chunks in the shared schema:
         {chunk_id, document_id, source_name, text, page, metadata, ...}
 
-<<<<<<< HEAD
-def _reset_state() -> None:
-    """
-    Clear index state so retrieve() reloads from the new index on next call.
-    Called internally after ingest() rebuilds the index.
-    """
-    global _bm25, _index, _chunk_records
-    _bm25          = None
-    _index         = None
-    _chunk_records = None
-
-
-
-# public interface
-
-
-def ingest(
-    file_paths:    list,
-    chunk_size:    int = 300,
-    chunk_overlap: int = 50,
-) -> dict:
-    """
-    Ingest one or more documents into the keyword index.
-
-    Called by the backend after a user uploads files.
-    Runs the full pipeline: load -> chunk -> tokenise -> inverted index + BM25 -> persist.
-    After ingestion, retrieve() will search this new index.
-
-    Args:
-        file_paths:    List of absolute or relative file paths to ingest.
-                       Supported types: .txt, .md, .pdf, .docx
-        chunk_size:    Number of words per chunk. Default: 300.
-        chunk_overlap: Number of overlapping words between adjacent chunks. Default: 50.
-=======
     Tokenisation uses Olivier's preprocessing pipeline (NLTK + stemming)
     for consistency with the standalone keyword research pipeline.
->>>>>>> 590d3f8e04a0690da0694a94c69bb26a5835d1dd
 
     Returns:
         {"status": "ok"|"error", "documents_ingested": int,
