@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { MessageSquare, ChevronRight, Clock, Trash2, MoreVertical, Pencil, Check, X } from "lucide-react";
-import { getSessions, getSessionMessages, renameSession, deleteSession } from "../services/queryService";
+import { getSessions, getSessionMessages, renameSession, deleteSession, deleteAllSessions } from "../services/queryService";
 
 
 interface ChatSession {
@@ -38,6 +38,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   const [menuPos, setMenuPos]           = useState<{ top: number; right: number } | null>(null);
   const [renamingId, setRenamingId]     = useState<string | null>(null);
   const [renameValue, setRenameValue]   = useState("");
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   /* ── Load sessions whenever a new message is sent ── */
@@ -98,6 +99,19 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
     setMenuPos(null);
   };
 
+  const handleClearAll = async () => {
+    if (!confirmClearAll) {
+      setConfirmClearAll(true);
+      return;
+    }
+    try {
+      await deleteAllSessions();
+      setSessions([]);
+      onNewChat();
+    } catch { /* silent */ }
+    setConfirmClearAll(false);
+  };
+
   const fetchSessions = async () => {
     setLoading(true);
     try {
@@ -136,19 +150,32 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
             onClick={() => setExpanded(!expanded)}
           >
             <MessageSquare className="size-4" />
-            Chat History
+            Chats
             <ChevronRight
               className={`size-3 transition-transform ${expanded ? "rotate-90" : ""}`}
             />
           </button>
 
-          <button
-            className="btn btn-primary btn-xs gap-1"
-            onClick={onNewChat}
-            title="Start new chat"
-          >
-            + New
-          </button>
+          <div className="flex items-center gap-1">
+            {sessions.length > 0 && (
+              <button
+                className={`btn btn-xs gap-1 ${confirmClearAll ? "btn-error" : "btn-ghost text-error"}`}
+                onClick={handleClearAll}
+                onBlur={() => setConfirmClearAll(false)}
+                title="Delete all chat history"
+              >
+                <Trash2 className="size-3" />
+                {confirmClearAll ? "Confirm?" : "Clear All"}
+              </button>
+            )}
+            <button
+              className="btn btn-primary btn-xs gap-1"
+              onClick={onNewChat}
+              title="Start new chat"
+            >
+              + New
+            </button>
+          </div>
         </div>
 
         {/* Session list */}
@@ -166,7 +193,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
               <div className="flex flex-col gap-1">
               {sessions.map((s) => {
                 const isActive   = s.session_id === currentSessionId;
-                const menuOpen   = menuOpenId === s.session_id;
+                //const menuOpen   = menuOpenId === s.session_id;
                 const isRenaming = renamingId === s.session_id;
 
                 return (
