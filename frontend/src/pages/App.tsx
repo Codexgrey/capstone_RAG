@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { Toaster, toast } from "react-hot-toast";
 
-import Sidebar      from "../components/SideBar";
-import ChatBox      from "../components/ChatBox";
-import ResponseCard from "../components/ResponseCard";
-import SourcesPanel from "../components/SourcesPanel";
-import Header       from "../components/Header";
-import ChatHistory  from "../components/ChatHistory";
-import Admin        from "../components/admin";
+import Sidebar        from "../components/SideBar";
+import ChatBox        from "../components/ChatBox";
+import ResponseCard   from "../components/ResponseCard";
+import SourcesPanel   from "../components/SourcesPanel";
+import Header         from "../components/Header";
+import ChatHistory    from "../components/ChatHistory";
+import Admin          from "../components/admin";
+import EvalBenchmark  from "../components/EvalBenchmark";   // ← new
 
 import { login, logout, register } from "../services/authService";
 import { sendQuery }               from "../services/queryService";
@@ -21,6 +22,7 @@ type Message  = { id?: string; role: "user"|"assistant"; content: string; create
 type EvalMetrics = {
   top_score?: number; avg_score?: number; source_coverage?: number;
   chunks_retrieved?: number; precision_at_k?: number; mrr?: number; source_diversity?: number;
+  triviaqa_em?: number; triviaqa_f1?: number; triviaqa_qid?: string;   // ← TriviaQA fields
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -33,7 +35,7 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
 
   const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
   const [refreshHistory,  setRefreshHistory]  = useState(0);
-
+  const [showBenchmark,   setShowBenchmark]   = useState(false);  // ← new
 
   const handleLoadSession = (sid: string, messages: Message[]) => {
     setSessionId(sid);
@@ -49,26 +51,44 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
   };
 
   const handleSend = async (query: string) => {
-    setHistoryMessages([]);          // clear history thread before sending
+    setHistoryMessages([]);
     await onSend(query);
     setRefreshHistory((n: number) => n + 1);
   };
 
   return (
     <div className="min-h-screen bg-base-200">
-      {/* Sidebar — visible to all users (upload + method also in ChatBox now) */}
       <Sidebar open={menuOpen} setOpen={setMenuOpen} setMethod={setMethod} />
 
       <Header
         setMenuOpen={setMenuOpen} showMenu={true}
         username={currentUser.username} onLogout={onLogout}
-        onAdminToggle={isAdmin ? () => setShowAdmin(!showAdmin) : undefined}
+        onAdminToggle={isAdmin ? () => { setShowAdmin(!showAdmin); setShowBenchmark(false); } : undefined}
         showAdmin={showAdmin} theme={theme} onThemeToggle={onThemeToggle}
       />
 
-      <main className="max-w-7xl mx-auto p-6 mt-6">
+      {/* ── Benchmark toggle button (visible to all logged-in users) ── */}
+      <div className="max-w-7xl mx-auto px-6 pt-4 flex justify-end">
+        <button
+          className={`btn btn-sm gap-2 ${showBenchmark ? "btn-primary" : "btn-outline"}`}
+          onClick={() => { setShowBenchmark(b => !b); setShowAdmin(false); }}
+          title="Toggle TriviaQA benchmark runner"
+        >
+          {/* flask icon via unicode — no extra import needed */}
+          🧪 {showBenchmark ? "Close Benchmark" : "TriviaQA Benchmark"}
+        </button>
+      </div>
+
+      <main className="max-w-7xl mx-auto p-6 mt-2">
+        {/* ── Admin panel ── */}
         {isAdmin && showAdmin ? (
           <Admin onLogout={onLogout} />
+
+        /* ── TriviaQA benchmark panel ── */
+        ) : showBenchmark ? (
+          <EvalBenchmark />
+
+        /* ── Normal chat layout ── */
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-w-0">
 
@@ -95,7 +115,12 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
 
             {/* Sources — 1 col */}
             <div className="lg:col-span-1 min-w-0">
-              <SourcesPanel citations={citations} latency_ms={latency.retrieval} retrieval_method={responseMethod} evaluation_metrics={evalMetrics} />
+              <SourcesPanel
+                citations={citations}
+                latency_ms={latency.retrieval}
+                retrieval_method={responseMethod}
+                evaluation_metrics={evalMetrics}
+              />
             </div>
 
           </div>
