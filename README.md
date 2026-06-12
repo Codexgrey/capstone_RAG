@@ -126,6 +126,29 @@ Each module exposes:
 - `ingest(file_paths, chunk_size, chunk_overlap) → dict`
 - `retrieve(query, top_k) → dict`
 
+## Evaluation (TriviaQA Benchmark)
+
+The system includes an external, citable benchmark using TriviaQA (Joshi et al., ACL 2017):
+a 5,000-question bank scored with official Exact Match (EM) and token-level F1 metrics.
+
+- `GET  /api/evaluate/triviaqa/stats` — bank statistics (domain/answer-type breakdown)
+- `GET  /api/evaluate/triviaqa/questions` — paginated question list (no answers)
+- `POST /api/evaluate/triviaqa/score` — score one predicted answer against ground truth
+- `POST /api/evaluate/triviaqa/run` — run the live RAG pipeline on a subset and score results
+
+Benchmark runs do **not** appear in chat history — they execute with `persist=False`
+so evaluation traffic stays separate from real conversations.
+
+## Chat History Management
+
+Each user's conversations are stored in PostgreSQL and persist across logins:
+
+- `GET    /api/chat/sessions` — list sessions
+- `GET    /api/chat/sessions/{id}` — get messages in a session
+- `PATCH  /api/chat/sessions/{id}` — rename a session
+- `DELETE /api/chat/sessions/{id}` — delete one session
+- `DELETE /api/chat/sessions` — delete **all** sessions for the current user
+
 ## Team
 
 | Name    | Role              | Module             |
