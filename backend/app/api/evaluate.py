@@ -43,6 +43,11 @@ from app.evaluation.triviaqa_evaluator import (
     score_single,
     run_triviaqa_batch,
 )
+from app.evaluation.triviaqa_precision_evaluator import (
+    run_precision_batch,
+    get_checkpoint_status,
+    reset_checkpoint,
+)
 
 router = APIRouter(prefix="/evaluate", tags=["Evaluation"])
 
@@ -64,6 +69,14 @@ class RunRequest(BaseModel):
     n:                Optional[int]       = Field(default=None, ge=1, le=5000)
     domain:           Optional[str]       = None   # "Wikipedia" | "Web"
     qtype:            Optional[str]       = None   # "WikipediaEntity"|"Numerical"|"FreeForm"
+
+
+class PrecisionRunRequest(BaseModel):
+    retrieval_method: str = "vector"
+    top_k:            int = Field(default=5,   ge=1,  le=20)
+    batch_size:       int = Field(default=200, ge=1,  le=500)
+    chunk_size:       int = Field(default=200, ge=50, le=600)
+    chunk_overlap:    int = Field(default=40,  ge=0,  le=200)
 
 
 # ---------------------------------------------------------------------------
@@ -229,5 +242,108 @@ def run_triviaqa_evaluation(
         "note": (
             "EM = 1.0 when the prediction exactly matches any normalised alias. "
             "F1 measures token overlap with the best-matching alias."
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /evaluate/triviaqa-precision/status
+# ---------------------------------------------------------------------------
+
+@router.get("/triviaqa-precision/status")
+def triviaqa_precision_status(
+    retrieval_method: str = Query(default="vector"),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Current resume position and cumulative metrics for a method's
+    Precision/Recall benchmark, without running any questions.
+
+    Use this to populate the panel on load and after each run, so the
+    frontend can show "N questions done so far — click Run to continue".
+    """
+    if retrieval_method not in ("vector", "keyword", "hybrid"):
+        raise HTTPException(
+            status_code=400,
+            detail="retrieval_method must be one of: vector, keyword, hybrid",
+        )
+    return get_checkpoint_status(retrieval_method)
+
+
+# ---------------------------------------------------------------------------
+# POST /evaluate/triviaqa-precision/reset
+# ---------------------------------------------------------------------------
+
+@router.post("/triviaqa-precision/reset")
+def triviaqa_precision_reset(
+    retrieval_method: str = Query(default="vector"),
+    current_user: User = Depends(get_current_user),
+):
+    """Discard the saved checkpoint for a method, starting that benchmark
+    over from question 0."""
+    if retrieval_method not in ("vector", "keyword", "hybrid"):
+        raise HTTPException(
+            status_code=400,
+            detail="retrieval_method must be one of: vector, keyword, hybrid",
+        )
+    reset_checkpoint(retrieval_method)
+    return get_checkpoint_status(retrieval_method)
+
+
+# ---------------------------------------------------------------------------
+# POST /evaluate/triviaqa-precision/run
+# ---------------------------------------------------------------------------
+
+@router.post("/triviaqa-precision/run")
+def run_triviaqa_precision_evaluation(
+    payload: PrecisionRunRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Run the next batch of the Precision/Recall benchmark, resuming from
+    the saved checkpoint for retrieval_method.
+
+    For each question in the batch:
+      1. Build chunks from that question's own TriviaQA evidence
+         (search_results, falling back to entity_pages).
+      2. Ingest into the chosen retrieval method's index in isolation.
+      3. Retrieve top_k chunks and score both:
+           - Answer-in-Context@k / Answer-in-Top-1 / MRR
+           - Precision@k / Recall@k against the question's own evidence
+      4. Remove the question's evidence from the index before the next
+         question starts.
+
+    ⚠️  This is isolated per-question evaluation — each question re-builds
+        a small index from scratch. A batch of 200 questions takes roughly
+        the same order of magnitude as the equivalent standalone benchmark
+        run (minutes, not seconds). Streaming starts from question 0 on
+        first use and resumes from the checkpoint on subsequent calls.
+    """
+    if payload.retrieval_method not in ("vector", "keyword", "hybrid"):
+        raise HTTPException(
+            status_code=400,
+            detail="retrieval_method must be one of: vector, keyword, hybrid",
+        )
+
+    try:
+        result = run_precision_batch(
+            retrieval_method = payload.retrieval_method,
+            top_k            = payload.top_k,
+            batch_size       = payload.batch_size,
+            chunk_size       = payload.chunk_size,
+            chunk_overlap    = payload.chunk_overlap,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {
+        **result,
+        "scoring_protocol": (
+            "Isolated per-question evaluation using TriviaQA's own evidence "
+            "as the gold document (search_results, with entity_pages as "
+            "fallback). Precision@k/Recall@k measure retrieved-chunk "
+            "membership in that gold set; Answer-in-Context@k/Top-1/MRR "
+            "measure whether a correct answer alias appears in the "
+            "retrieved text."
         ),
     }

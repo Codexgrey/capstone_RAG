@@ -294,7 +294,7 @@ const EvalBenchmark: React.FC = () => {
       <div className="flex items-center gap-3">
         <FlaskConical className="size-6 text-primary" />
         <div>
-          <h2 className="text-xl font-bold">TriviaQA Benchmark</h2>
+          <h2 className="text-xl font-bold">Groundedness Benchmark</h2>
           <p className="text-base-content/50 text-sm">
             Official EM &amp; F1 evaluation — 5,000-question bank (Joshi et al., ACL 2017)
           </p>
@@ -375,7 +375,7 @@ const EvalBenchmark: React.FC = () => {
                 onChange={e => setN(Number(e.target.value))}
                 disabled={running}
               >
-                {[10, 15, 20, 25, 50, 100, 250, 500, 1000, 5000].map(v => (
+                {[10, 20, 30, 50, 100, 250, 500].map(v => (
                   <option key={v} value={v}>{v.toLocaleString()}</option>
                 ))}
               </select>

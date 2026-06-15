@@ -7,8 +7,9 @@ import ResponseCard   from "../components/ResponseCard";
 import SourcesPanel   from "../components/SourcesPanel";
 import Header         from "../components/Header";
 import ChatHistory    from "../components/ChatHistory";
-import Admin          from "../components/admin";
-import EvalBenchmark  from "../components/EvalBenchmark";   // ← new
+import Admin              from "../components/admin";
+import EvalBenchmark      from "../components/EvalBenchmark";       // ← Groundedness
+import PrecisionBenchmark from "../components/PrecisionBenchmark";  // ← Precision
 
 import { login, logout, register } from "../services/authService";
 import { sendQuery }               from "../services/queryService";
@@ -25,17 +26,45 @@ type EvalMetrics = {
   triviaqa_em?: number; triviaqa_f1?: number; triviaqa_qid?: string;   // ← TriviaQA fields
 };
 
+type MainLayoutProps = {
+  response: string;
+  setResponse: (value: string) => void;
+  citations: Citation[];
+  setCitations: (value: Citation[]) => void;
+  latency: Latency;
+  setLatency: (value: Latency) => void;
+  onSend: (query: string) => Promise<void>;
+  onLogout: () => void;
+  loading: boolean;
+  currentUser: User;
+  sessionId: string | null;
+  setSessionId: (value: string | null) => void;
+  method: string;
+  setMethod: (value: string) => void;
+  menuOpen: boolean;
+  setMenuOpen: (value: boolean) => void;
+  showAdmin: boolean;
+  setShowAdmin: (value: boolean) => void;
+  theme: Theme;
+  onThemeToggle: () => void;
+  isAdmin: boolean;
+  responseMethod: string;
+  evalMetrics: EvalMetrics;
+  setEvalMetrics: (value: EvalMetrics) => void;
+};
+
 /* ══════════════════════════════════════════════════════════
    MAIN LAYOUT
 ══════════════════════════════════════════════════════════ */
 function MainLayout({ response, setResponse, citations, setCitations, latency, setLatency,
   onSend, onLogout, loading, currentUser, sessionId, setSessionId, method, setMethod,
   menuOpen, setMenuOpen, showAdmin, setShowAdmin, theme, onThemeToggle, isAdmin, responseMethod,
-  evalMetrics, setEvalMetrics }: any) {
+  evalMetrics, setEvalMetrics }: MainLayoutProps) {
 
   const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
   const [refreshHistory,  setRefreshHistory]  = useState(0);
-  const [showBenchmark,   setShowBenchmark]   = useState(false);  // ← new
+  const [showBenchmark,   setShowBenchmark]   = useState(false);  // ← Groundedness panel
+  const [showPrecision,   setShowPrecision]   = useState(false);  // ← Precision panel
 
   const handleLoadSession = (sid: string, messages: Message[]) => {
     setSessionId(sid);
@@ -63,20 +92,32 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
       <Header
         setMenuOpen={setMenuOpen} showMenu={true}
         username={currentUser.username} onLogout={onLogout}
-        onAdminToggle={isAdmin ? () => { setShowAdmin(!showAdmin); setShowBenchmark(false); } : undefined}
+        onAdminToggle={isAdmin ? () => { setShowAdmin(!showAdmin); setShowBenchmark(false); setShowPrecision(false); } : undefined}
         showAdmin={showAdmin} theme={theme} onThemeToggle={onThemeToggle}
       />
 
-      {/* ── Benchmark toggle button (visible to all logged-in users) ── */}
-      <div className="max-w-7xl mx-auto px-6 pt-4 flex justify-end">
-        <button
-          className={`btn btn-sm gap-2 ${showBenchmark ? "btn-primary" : "btn-outline"}`}
-          onClick={() => { setShowBenchmark(b => !b); setShowAdmin(false); }}
-          title="Toggle TriviaQA benchmark runner"
-        >
-          {/* flask icon via unicode — no extra import needed */}
-          🧪 {showBenchmark ? "Close Benchmark" : "TriviaQA Benchmark"}
-        </button>
+      {/* ── TriviaQA Benchmark button row (visible to all logged-in users) ── */}
+      <div className="max-w-7xl mx-auto px-6 pt-4 flex flex-col items-center gap-2">
+        <span className="text-lg font-semibold  tracking-wide text-base-content/60">
+          TriviaQA Benchmark
+        </span>
+        <div className="inline-flex rounded-full border border-base-300 p-1 gap-1">
+          <button
+            className={`btn btn-sm gap-2 rounded-full ${showBenchmark ? "btn-error" : "btn-outline"}`}
+            onClick={() => { setShowBenchmark(b => !b); setShowPrecision(false); setShowAdmin(false); }}
+            title="Toggle TriviaQA groundedness benchmark runner"
+          >
+            {/* flask icon via unicode — no extra import needed */}
+            🧪 {showBenchmark ? "Close Groundedness" : "Groundedness"}
+          </button>
+          <button
+            className={`btn btn-sm gap-2 rounded-full ${showPrecision ? "btn-error" : "btn-outline"}`}
+            onClick={() => { setShowPrecision(p => !p); setShowBenchmark(false); setShowAdmin(false); }}
+            title="Toggle TriviaQA precision/relevance benchmark runner"
+          >
+            🎯 {showPrecision ? "Close Precision" : "Precision"}
+          </button>
+        </div>
       </div>
 
       <main className="max-w-7xl mx-auto p-6 mt-2">
@@ -84,9 +125,13 @@ function MainLayout({ response, setResponse, citations, setCitations, latency, s
         {isAdmin && showAdmin ? (
           <Admin onLogout={onLogout} />
 
-        /* ── TriviaQA benchmark panel ── */
+        /* ── TriviaQA groundedness benchmark panel ── */
         ) : showBenchmark ? (
           <EvalBenchmark />
+
+        /* ── TriviaQA precision/relevance benchmark panel ── */
+        ) : showPrecision ? (
+          <PrecisionBenchmark />
 
         /* ── Normal chat layout ── */
         ) : (
@@ -193,8 +238,9 @@ export default function App() {
       await register(username, email, password);
       toast.success("Account created! You can now log in.");
       setAuthMode("login"); setUsername(""); setPassword("");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Registration failed");
+    } catch (err) {
+      const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Registration failed";
+      toast.error(errorMessage);
     }
   };
 

@@ -82,6 +82,66 @@ def _load_state():
 # public interface
 # ---------------------------------------------------------------------------
 
+def delete(document_id: str) -> dict:
+    """
+    Remove all chunks belonging to document_id from the FAISS index.
+
+    Used for isolated per-question evaluation, where a document is
+    ingested, queried, then removed before the next question starts —
+    so no chunks carry over between questions.
+
+    Rebuilds the index from the remaining chunks (same approach as the
+    re-ingest path in ingest(), reconstructing kept vectors via
+    index.reconstruct()). If document_id is not present, or no index
+    exists yet, this is a no-op and returns total_chunks for whatever
+    is currently on disk (0 if nothing exists).
+
+    Returns:
+        {"status": "ok"|"error", "removed_chunks": int,
+         "total_chunks": int, "error": str|None}
+    """
+    if not os.path.exists(INDEX_PATH) or not os.path.exists(CHUNKS_PATH):
+        return {"status": "ok", "removed_chunks": 0, "total_chunks": 0, "error": None}
+
+    try:
+        existing_index, existing_chunks = load_index(INDEX_PATH, CHUNKS_PATH)
+
+        keep_positions = [i for i, c in enumerate(existing_chunks)
+                          if c.get('document_id') != document_id]
+        removed = len(existing_chunks) - len(keep_positions)
+
+        if removed == 0:
+            return {"status": "ok", "removed_chunks": 0,
+                    "total_chunks": len(existing_chunks), "error": None}
+
+        kept_chunks = [existing_chunks[i] for i in keep_positions]
+
+        if kept_chunks:
+            kept_vecs = np.vstack([
+                existing_index.reconstruct(pos) for pos in keep_positions
+            ]).astype('float32')
+            dim   = kept_vecs.shape[1]
+            index = faiss.IndexFlatL2(dim)
+            index.add(kept_vecs)
+        else:
+            # No chunks left at all — keep the existing dimensionality
+            # by writing an empty index of the same dim.
+            dim   = existing_index.d
+            index = faiss.IndexFlatL2(dim)
+
+        faiss.write_index(index, INDEX_PATH)
+        np.save(CHUNKS_PATH, np.array(kept_chunks, dtype=object))
+
+        with _lock:
+            _reset_state()  # force reload on next retrieve()
+
+        return {"status": "ok", "removed_chunks": removed,
+                "total_chunks": len(kept_chunks), "error": None}
+
+    except Exception as e:
+        return {"status": "error", "removed_chunks": 0, "total_chunks": 0, "error": str(e)}
+
+
 def ingest(chunks: list, document_id: str) -> dict:
     """
     Incrementally ingest pre-chunked text into the vector index.

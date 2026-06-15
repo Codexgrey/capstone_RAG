@@ -70,6 +70,68 @@ def _load_cached_state():
 
 # ── Public interface ──────────────────────────────────────────────────────────
 
+def delete(document_id: str) -> dict:
+    """
+    Remove all chunks belonging to document_id from the BM25 index.
+
+    Used for isolated per-question evaluation, where a document is
+    ingested, queried, then removed before the next question starts —
+    so no chunks carry over between questions.
+
+    Rebuilds the BM25 model from the remaining chunks (same tokenisation
+    pipeline as ingest()). If document_id is not present, or no index
+    exists yet, this is a no-op and returns total_chunks for whatever
+    is currently on disk (0 if nothing exists).
+
+    Returns:
+        {"status": "ok"|"error", "removed_chunks": int,
+         "total_chunks": int, "error": str|None}
+    """
+    if not os.path.exists(_CHUNKS_PATH):
+        return {"status": "ok", "removed_chunks": 0, "total_chunks": 0, "error": None}
+
+    with _lock:
+        try:
+            with open(_CHUNKS_PATH, "rb") as f:
+                existing = pickle.load(f)
+
+            kept = [c for c in existing if c.get("document_id") != document_id]
+            removed = len(existing) - len(kept)
+
+            if removed == 0:
+                return {"status": "ok", "removed_chunks": 0,
+                        "total_chunks": len(existing), "error": None}
+
+            if kept:
+                from rank_bm25 import BM25Okapi
+                from preprocessing.preprocess import tokenize_chunk, detect_language
+
+                sample_text = kept[0]["text"]
+                _, nltk_lang = detect_language(sample_text)
+                tokenized = [tokenize_chunk(c["text"], nltk_lang) for c in kept]
+                bm25 = BM25Okapi(tokenized)
+
+                with open(_BM25_PATH, "wb") as f: pickle.dump(bm25, f)
+                with open(_CHUNKS_PATH, "wb") as f: pickle.dump(kept, f)
+            else:
+                # Nothing left to index — remove the BM25 model and
+                # chunk pickles entirely so retrieve() reports
+                # "no index found" rather than scoring an empty corpus.
+                if os.path.exists(_BM25_PATH):
+                    os.remove(_BM25_PATH)
+                if os.path.exists(_CHUNKS_PATH):
+                    os.remove(_CHUNKS_PATH)
+
+            _invalidate_cache()
+
+            return {"status": "ok", "removed_chunks": removed,
+                    "total_chunks": len(kept), "error": None}
+
+        except Exception as e:
+            logger.warning(f"  ⚠️  Keyword delete error: {e}")
+            return {"status": "error", "removed_chunks": 0, "total_chunks": 0, "error": str(e)}
+
+
 def ingest(chunks: list, document_id: str) -> dict:
     """
     Build/update the BM25 index with chunks from a newly uploaded document.
