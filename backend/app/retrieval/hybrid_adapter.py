@@ -17,11 +17,27 @@ lazy imports inside function bodies:
     from models.embedding_model import ...
 These fire at call time, not at exec_module time, so sys.path must remain
 intact for the full duration of each public function call.
+
+CACHING
+-------
+Nathan's module keeps the SentenceTransformer model, FAISS index, vector
+chunk records, BM25 model, and keyword chunk records as module-level
+caches (see hybrid_retrieval/src/retrieval/hybrid_adapter.py), reloading
+them lazily on first retrieve(). Previously, this bridge called
+exec_module() on EVERY retrieve() call, creating a brand-new module object
+each time and discarding that cache — forcing a full SentenceTransformer +
+FAISS + BM25 reload on every single query (the dominant cost of a TriviaQA
+batch run).
+
+The module is now loaded ONCE and cached in _hybrid_module. Subsequent
+retrieve() calls reuse the same module object. ingest() invalidates the
+cache so the next retrieve() picks up freshly rebuilt indexes.
 """
 
 import sys
 import os
 import re
+import threading
 import importlib.util
 
 _HY_ROOT    = os.path.abspath(
@@ -29,6 +45,10 @@ _HY_ROOT    = os.path.abspath(
 )
 _HY_SRC     = os.path.join(_HY_ROOT, "src")
 _HY_ADAPTER = os.path.join(_HY_SRC, "retrieval", "hybrid_adapter.py")
+
+# ── Module cache ──────────────────────────────────────────────────────────────
+_hybrid_module = None
+_cache_lock     = threading.RLock()
 
 
 def _load_hybrid_module():
@@ -47,6 +67,22 @@ def _load_hybrid_module():
     return mod
 
 
+def _get_hybrid_module():
+    """Return the cached module, loading it on first use only."""
+    global _hybrid_module
+    with _cache_lock:
+        if _hybrid_module is None:
+            _hybrid_module = _load_hybrid_module()
+        return _hybrid_module
+
+
+def _invalidate_cache():
+    """Drop the cached module so the next call reloads model + indexes from disk."""
+    global _hybrid_module
+    with _cache_lock:
+        _hybrid_module = None
+
+
 def ingest(chunks: list, document_id: str) -> dict:
     original_dir = os.getcwd()
     added = _HY_SRC not in sys.path
@@ -54,7 +90,7 @@ def ingest(chunks: list, document_id: str) -> dict:
         sys.path.insert(0, _HY_SRC)
     try:
         os.chdir(_HY_ROOT)
-        mod = _load_hybrid_module()
+        mod = _get_hybrid_module()
         return mod.ingest(chunks=chunks, document_id=document_id)
     except Exception as e:
         return {
@@ -62,6 +98,10 @@ def ingest(chunks: list, document_id: str) -> dict:
             "total_chunks": 0, "latency_ms": 0.0, "error": str(e),
         }
     finally:
+        # Invalidate regardless of success/failure — the underlying FAISS
+        # and BM25 files (owned by the vector/keyword adapters) may have
+        # changed as part of this same upload.
+        _invalidate_cache()
         if added and _HY_SRC in sys.path:
             sys.path.remove(_HY_SRC)
         os.chdir(original_dir)
@@ -74,7 +114,7 @@ def retrieve(query: str, top_k: int = 5) -> list:
         sys.path.insert(0, _HY_SRC)
     try:
         os.chdir(_HY_ROOT)
-        mod = _load_hybrid_module()
+        mod = _get_hybrid_module()
         result = mod.retrieve(query=query, top_k=top_k)
 
         chunks = []
@@ -99,6 +139,7 @@ def retrieve(query: str, top_k: int = 5) -> list:
     except FileNotFoundError:
         raise FileNotFoundError("No hybrid index found — upload documents first")
     except Exception as e:
+        _invalidate_cache()
         raise RuntimeError(f"Nathan hybrid retrieval failed: {e}")
     finally:
         if added and _HY_SRC in sys.path:

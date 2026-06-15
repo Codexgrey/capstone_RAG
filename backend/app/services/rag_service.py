@@ -110,7 +110,7 @@ def handle_query(
     # 6 — Build prompt and call LLM
     messages = build_chat_prompt(question=question, chunks=chunks)
     try:
-        answer = generate_answer(prompt=question, messages=messages, temperature=0.1)
+        answer = generate_answer(prompt=question, messages=messages, temperature=0.7)
     except Exception as e:
         answer = f"Error generating answer: {str(e)}"
 

@@ -40,6 +40,33 @@ _INDEX_PATH  = "keyword_index.pkl"
 
 _lock = threading.RLock()
 
+# ── In-memory cache for the BM25 model + chunk records ────────────────────────
+# retrieve() previously re-unpickled both files from disk on every call.
+# That's cheap for a single query, but adds up across a TriviaQA batch
+# (e.g. 10 redundant unpickles for a 10-question run). Cache them in memory
+# and only reload when the cache is empty or has been explicitly invalidated
+# by ingest().
+_bm25_cache   = None
+_chunks_cache = None
+
+
+def _invalidate_cache():
+    """Drop cached BM25 model + chunks so the next retrieve() reloads from disk."""
+    global _bm25_cache, _chunks_cache
+    with _lock:
+        _bm25_cache   = None
+        _chunks_cache = None
+
+
+def _load_cached_state():
+    """Load BM25 model + chunk records from disk, caching for subsequent calls."""
+    global _bm25_cache, _chunks_cache
+    with _lock:
+        if _bm25_cache is None or _chunks_cache is None:
+            with open(_BM25_PATH,   "rb") as f: _bm25_cache   = pickle.load(f)
+            with open(_CHUNKS_PATH, "rb") as f: _chunks_cache = pickle.load(f)
+        return _bm25_cache, _chunks_cache
+
 
 # ── Public interface ──────────────────────────────────────────────────────────
 
@@ -93,6 +120,10 @@ def ingest(chunks: list, document_id: str) -> dict:
             if not os.path.exists(_INDEX_PATH):
                 with open(_INDEX_PATH, "wb") as f: pickle.dump({}, f)
 
+            # New BM25 model + chunks written to disk — drop the in-memory
+            # cache so the next retrieve() picks up the rebuilt index.
+            _invalidate_cache()
+
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
             print(
                 f"  ✅ Keyword (BM25): {len(chunks)} new, "
@@ -145,8 +176,7 @@ def retrieve(query: str, top_k: int = 5) -> dict:
     try:
         from preprocessing.preprocess import tokenize_chunk, detect_language
 
-        with open(_BM25_PATH,   "rb") as f: bm25   = pickle.load(f)
-        with open(_CHUNKS_PATH, "rb") as f: chunks = pickle.load(f)
+        bm25, chunks = _load_cached_state()
 
         _, nltk_lang    = detect_language(query)
         query_tokens    = tokenize_chunk(query, nltk_lang)

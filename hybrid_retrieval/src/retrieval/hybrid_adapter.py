@@ -48,6 +48,61 @@ _VECCHUNK_PATH= os.path.join(_VEC_ROOT, "chunk_records.npy")
 _BM25_PATH    = os.path.join(_KW_ROOT,  "keyword_bm25.pkl")
 _KWCHUNK_PATH = os.path.join(_KW_ROOT,  "keyword_chunks.pkl")
 
+# ── In-memory cache ────────────────────────────────────────────────────────────
+# retrieve() previously reloaded the SentenceTransformer model, the FAISS
+# index, the vector chunk records, the BM25 model, and the keyword chunks
+# from disk on EVERY call. SentenceTransformer load alone is the dominant
+# cost (~1-3s), so a 10-question TriviaQA batch meant 10 redundant full
+# reloads of all five artifacts. Cache them in memory; ingest() (in either
+# the vector or keyword module) invalidates via _invalidate_cache().
+_model_cache       = None  # SentenceTransformer
+_faiss_index_cache = None  # faiss.Index
+_vec_chunks_cache  = None  # list[dict]
+_bm25_cache        = None  # BM25Okapi
+_kw_chunks_cache   = None  # list[dict]
+
+
+def _invalidate_cache():
+    """Drop all cached models/indexes so the next retrieve() reloads from disk."""
+    global _model_cache, _faiss_index_cache, _vec_chunks_cache, _bm25_cache, _kw_chunks_cache
+    with _lock:
+        _model_cache       = None
+        _faiss_index_cache = None
+        _vec_chunks_cache  = None
+        _bm25_cache        = None
+        _kw_chunks_cache   = None
+
+
+def _get_model():
+    """Load (and cache) the shared embedding model used for FAISS search."""
+    global _model_cache
+    with _lock:
+        if _model_cache is None:
+            from models.embedding_model import load_embedding_model
+            _model_cache = load_embedding_model("all-MiniLM-L6-v2")
+        return _model_cache
+
+
+def _get_faiss_state():
+    """Load (and cache) the FAISS index + vector chunk records."""
+    global _faiss_index_cache, _vec_chunks_cache
+    with _lock:
+        if _faiss_index_cache is None or _vec_chunks_cache is None:
+            import faiss
+            _faiss_index_cache = faiss.read_index(_FAISS_PATH)
+            _vec_chunks_cache  = np.load(_VECCHUNK_PATH, allow_pickle=True).tolist()
+        return _faiss_index_cache, _vec_chunks_cache
+
+
+def _get_bm25_state():
+    """Load (and cache) the BM25 model + keyword chunk records."""
+    global _bm25_cache, _kw_chunks_cache
+    with _lock:
+        if _bm25_cache is None or _kw_chunks_cache is None:
+            with open(_BM25_PATH,    "rb") as f: _bm25_cache      = pickle.load(f)
+            with open(_KWCHUNK_PATH, "rb") as f: _kw_chunks_cache = pickle.load(f)
+        return _bm25_cache, _kw_chunks_cache
+
 
 # ── Public interface ──────────────────────────────────────────────────────────
 
@@ -66,6 +121,12 @@ def ingest(chunks: list, document_id: str) -> dict:
     with _lock:
         faiss_ok = os.path.exists(_FAISS_PATH)
         bm25_ok  = os.path.exists(_BM25_PATH)
+
+        # The FAISS index and/or BM25 pickle on disk may have just been
+        # rewritten by the vector/keyword adapters as part of this same
+        # upload. Drop any cached copies so the next retrieve() reloads
+        # the fresh versions rather than serving stale in-memory state.
+        _invalidate_cache()
 
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
@@ -128,16 +189,13 @@ def retrieve(query: str, top_k: int = 5) -> dict:
             from retrieval.bm25_retriever    import retrieve_bm25
             from retrieval.hybrid_retriever  import reciprocal_rank_fusion
             from preprocessing.preprocess   import tokenize_chunk, detect_language
-            from models.embedding_model     import load_embedding_model
-            import faiss
 
             # ── Step 1: FAISS vector retrieval ───────────────────────────
             vector_results = []
             if os.path.exists(_FAISS_PATH) and os.path.exists(_VECCHUNK_PATH):
                 try:
-                    index  = faiss.read_index(_FAISS_PATH)
-                    chunks = np.load(_VECCHUNK_PATH, allow_pickle=True).tolist()
-                    model  = load_embedding_model("all-MiniLM-L6-v2")
+                    index, chunks = _get_faiss_state()
+                    model         = _get_model()
                     vector_results = _vec_retrieve(
                         query, model, index, chunks, top_k=top_k * 2
                     )
@@ -148,8 +206,7 @@ def retrieve(query: str, top_k: int = 5) -> dict:
             bm25_results = []
             if os.path.exists(_BM25_PATH) and os.path.exists(_KWCHUNK_PATH):
                 try:
-                    with open(_BM25_PATH,   "rb") as f: bm25   = pickle.load(f)
-                    with open(_KWCHUNK_PATH,"rb") as f: kw_chunks = pickle.load(f)
+                    bm25, kw_chunks = _get_bm25_state()
 
                     _, nltk_lang = detect_language(query)
                     # Build a minimal inverted index for matched_terms reporting
