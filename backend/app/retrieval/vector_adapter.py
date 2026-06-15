@@ -85,6 +85,35 @@ def _invalidate_cache():
         _vector_module = None
 
 
+def delete(document_id: str) -> dict:
+    """
+    Remove all chunks belonging to document_id from the vector index.
+
+    Same load/chdir/sys.path pattern as ingest(). Used by isolated
+    per-question benchmarks to clear a question's evidence before the
+    next question is ingested.
+    """
+    original_dir = os.getcwd()
+    added_root = _VECTOR_ROOT not in sys.path
+    if added_root:
+        sys.path.insert(0, _VECTOR_ROOT)
+    try:
+        os.chdir(_VECTOR_ROOT)
+        mod = _get_vector_module()
+        if not hasattr(mod, "delete"):
+            return {"status": "error", "error": "vector module has no delete()",
+                    "removed_chunks": 0, "total_chunks": 0}
+        return mod.delete(document_id=document_id)
+    except Exception as e:
+        return {"status": "error", "error": str(e),
+                "removed_chunks": 0, "total_chunks": 0}
+    finally:
+        _invalidate_cache()
+        if added_root and _VECTOR_ROOT in sys.path:
+            sys.path.remove(_VECTOR_ROOT)
+        os.chdir(original_dir)
+
+
 def ingest(chunks: list, document_id: str) -> dict:
     original_dir = os.getcwd()
     added_root = _VECTOR_ROOT not in sys.path

@@ -79,6 +79,35 @@ def _invalidate_cache():
         _keyword_module = None
 
 
+def delete(document_id: str) -> dict:
+    """
+    Remove all chunks belonging to document_id from the BM25 index.
+
+    Same load/chdir/sys.path pattern as ingest(). Used by isolated
+    per-question benchmarks to clear a question's evidence before the
+    next question is ingested.
+    """
+    original_dir = os.getcwd()
+    added = _KW_SRC not in sys.path
+    if added:
+        sys.path.insert(0, _KW_SRC)
+    try:
+        os.chdir(_KW_ROOT)
+        mod = _get_keyword_module()
+        if not hasattr(mod, "delete"):
+            return {"status": "error", "error": "keyword module has no delete()",
+                    "removed_chunks": 0, "total_chunks": 0}
+        return mod.delete(document_id=document_id)
+    except Exception as e:
+        return {"status": "error", "error": str(e),
+                "removed_chunks": 0, "total_chunks": 0}
+    finally:
+        _invalidate_cache()
+        if added and _KW_SRC in sys.path:
+            sys.path.remove(_KW_SRC)
+        os.chdir(original_dir)
+
+
 def ingest(chunks: list, document_id: str) -> dict:
     original_dir = os.getcwd()
     added = _KW_SRC not in sys.path
