@@ -19,7 +19,7 @@ from app.config.settings import settings
 def generate_answer(
     prompt: str,
     messages: List[Dict[str, str]] = None,
-    temperature: float = 0.1,
+    temperature: float = 0.7,
 ) -> str:
     """
     Generate an answer from the configured LLM backend.

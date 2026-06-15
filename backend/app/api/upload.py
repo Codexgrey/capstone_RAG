@@ -11,7 +11,6 @@ Upload flow:
      do not block the document from being queryable via ChromaDB.
 """
 
-import os
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
@@ -144,22 +143,7 @@ async def process_document_background(
         # ── Step 5: Index in secondary stores (non-blocking, sequential) ──
         # These run AFTER ChromaDB is confirmed ready so the doc is always
         # queryable. Failures are warnings only — ChromaDB fallback covers them.
-        abs_filepath = os.path.abspath(filepath)
-
-        # Vector module prefers .txt; write OCR txt for PDFs
-        if text and file_type == "pdf":
-            txt_path = abs_filepath.replace(".pdf", "_ocr.txt")
-            try:
-                with open(txt_path, "w", encoding="utf-8") as f:
-                    f.write(text)
-                vector_file_path = txt_path
-            except Exception as e:
-                print(f"  ⚠️  Could not save OCR txt: {e}")
-                vector_file_path = abs_filepath
-        else:
-            vector_file_path = abs_filepath
-
-        _run_vector_ingest(vector_file_path)
+        _run_vector_ingest(chunks, document_id)
         _run_keyword_ingest(chunks, document_id)
         _run_hybrid_ingest(chunks, document_id)
 
@@ -182,10 +166,10 @@ async def process_document_background(
         db.close()
 
 
-def _run_vector_ingest(file_path: str):
+def _run_vector_ingest(chunks: list, document_id: str):
     try:
         from app.retrieval.vector_adapter import ingest as _ingest
-        r = _ingest(file_paths=[file_path])
+        r = _ingest(chunks=chunks, document_id=document_id)
         if r.get("status") == "ok":
             print(f"  ✅ Vector (FAISS): {r.get('total_chunks')} total chunks")
         else:
