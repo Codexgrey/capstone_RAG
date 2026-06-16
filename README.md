@@ -107,6 +107,9 @@ npm run dev
 4. Upload a PDF, DOCX, TXT, or MD file
 5. Select a retrieval method in the chat input: **Vector**, **Keyword**, or **Hybrid**
 6. Ask a question
+7. Use the **TriviaQA Benchmark** row (Groundedness / Precision) to run evaluations — the
+   active button turns red ("Close Groundedness" / "Close Precision") to indicate it can be
+   clicked again to close the panel
 
 ## Shared Contract (Integration Reference)
 
@@ -126,18 +129,53 @@ Each module exposes:
 - `ingest(file_paths, chunk_size, chunk_overlap) → dict`
 - `retrieve(query, top_k) → dict`
 
-## Evaluation (TriviaQA Benchmark)
+## Evaluation (TriviaQA Benchmarks)
 
-The system includes an external, citable benchmark using TriviaQA (Joshi et al., ACL 2017):
-a 5,000-question bank scored with official Exact Match (EM) and token-level F1 metrics.
+The system includes two complementary TriviaQA-based benchmark tracks (Joshi et al., ACL 2017),
+both runnable from the **TriviaQA Benchmark** button row in the UI.
+
+### Groundedness (EM/F1) — `EvalBenchmark`
+
+A static 5,000-question bank scored with official Exact Match (EM) and token-level F1 metrics
+against the system's own 9-document corpus.
 
 - `GET  /api/evaluate/triviaqa/stats` — bank statistics (domain/answer-type breakdown)
 - `GET  /api/evaluate/triviaqa/questions` — paginated question list (no answers)
 - `POST /api/evaluate/triviaqa/score` — score one predicted answer against ground truth
 - `POST /api/evaluate/triviaqa/run` — run the live RAG pipeline on a subset and score results
 
-Benchmark runs do **not** appear in chat history — they execute with `persist=False`
+### Close Precision — `PrecisionBenchmark`
+
+An isolated per-question Precision@k / Recall@k / Answer-in-Context@k / Top-1 / MRR benchmark,
+streaming live from `trivia_qa/rc/validation` on HuggingFace. For each question, that question's
+own evidence is chunked and ingested in isolation, retrieved, scored, then deleted before the
+next question starts — so questions never share an index and gold relevance is unambiguous.
+
+- `GET  /api/evaluate/triviaqa-precision/status?retrieval_method=vector|keyword|hybrid` —
+  resume index + cumulative metrics for a method
+- `POST /api/evaluate/triviaqa-precision/reset?retrieval_method=vector|keyword|hybrid` —
+  discard checkpoint, restart from question 0
+- `POST /api/evaluate/triviaqa-precision/run` — run the next batch
+  (`retrieval_method`, `top_k`, `batch_size`, `chunk_size`, `chunk_overlap`)
+
+Resumable via per-method checkpoint files
+(`backend/app/evaluation/triviaqa_precision_checkpoint_{method}.json`).
+
+**Hybrid isolation note:** Hybrid has no index of its own — it fuses results from the Vector
+and Keyword indexes via RRF. For Hybrid runs, each question's evidence is ingested into
+**both** the Vector and Keyword indexes (and removed from both during cleanup), with the
+hybrid adapter's in-memory FAISS/BM25 caches invalidated on each step so retrieval always
+reflects the current isolated index — never the production corpus or stale cached state.
+
+Both benchmark runs do **not** appear in chat history — they execute with `persist=False`
 so evaluation traffic stays separate from real conversations.
+
+### Index maintenance — `delete()`
+
+Vector and Keyword adapters (and their backend bridges) now expose `delete(document_id)`,
+removing that document's chunks and rebuilding the index/model from the remaining chunks.
+This underlies the Close Precision benchmark's per-question isolation and is also available
+for general document removal.
 
 ## Chat History Management
 
