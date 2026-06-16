@@ -279,6 +279,31 @@ def delete_document(
     except Exception as e:
         print(f"  ⚠️  Could not delete ChromaDB chunks: {e}")
 
+    # Remove from FAISS index (vector retrieval)
+    try:
+        from app.retrieval.vector_adapter import delete as _vec_delete
+        r = _vec_delete(document_id=document_id)
+        print(f"  ✅ Vector (FAISS): removed chunks for {document_id} — {r.get('total_chunks', '?')} remaining")
+    except Exception as e:
+        print(f"  ⚠️  Could not delete Vector (FAISS) chunks: {e}")
+
+    # Remove from BM25 index (keyword retrieval)
+    try:
+        from app.retrieval.keyword_adapter import delete as _kw_delete
+        r = _kw_delete(document_id=document_id)
+        print(f"  ✅ Keyword (BM25): removed chunks for {document_id} — {r.get('total_chunks', '?')} remaining")
+    except Exception as e:
+        print(f"  ⚠️  Could not delete Keyword (BM25) chunks: {e}")
+
+    # Hybrid reads FAISS + BM25 directly — no separate index to clear.
+    # Both stores above have already been cleaned; invalidate the hybrid
+    # bridge's in-memory cache so the next query reflects the cleared indexes.
+    try:
+        from app.retrieval import hybrid_adapter as _hybrid
+        _hybrid._invalidate_cache()
+    except Exception as e:
+        print(f"  ⚠️  Could not invalidate Hybrid cache: {e}")
+
     db.delete(doc)
     db.add(Log(
         user_id   = current_user.id,

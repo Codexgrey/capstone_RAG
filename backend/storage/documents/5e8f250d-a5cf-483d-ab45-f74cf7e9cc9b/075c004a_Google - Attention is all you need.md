@@ -1,4 +1,4 @@
-<!-- markdownlint-disable -->
+
 
 Provided proper attribution is provided, Google hereby grants permission to
 reproduce the tables and figures in this paper solely for use in journalistic or
